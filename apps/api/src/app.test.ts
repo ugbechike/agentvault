@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { buildApp } from "@/app";
 import { issueAgentToken, sha256 } from "@/lib/crypto/sha256";
+import { userRepository } from "@/modules/auth/repositories/user.repository";
+import { passwordHasher } from "@/modules/auth/services/password.service";
 
 const listen = async (app: FastifyInstance): Promise<string> => {
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -94,16 +96,27 @@ describe("protected routes", () => {
     expect(response.status).toBe(401);
   });
 
+  it("rejects public registration", async () => {
+    await start();
+    const response = await fetch(`${base}/api/auth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Public User", email: "public@example.com", password: "correct-horse-battery" }),
+    });
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("REGISTRATION_DISABLED");
+  });
+
   it("lists no tools and audits a denied call for an agent without a provider", async () => {
     await start();
     const email = `mcp-${Date.now()}@example.com`;
     const password = "correct-horse-battery";
-    const registered = await fetch(`${base}/api/auth/register`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: "MCP Tester", email, password }),
+    await userRepository.create({
+      email,
+      name: "MCP Tester",
+      passwordHash: await passwordHasher.hash(password),
     });
-    expect(registered.status).toBe(200);
     const signedIn = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },

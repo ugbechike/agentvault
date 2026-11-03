@@ -11,6 +11,8 @@ export interface StoredProviderCredential {
   expiresAt: string | null;
   scopes: string;
   tokenType: string;
+  /** Public OAuth client id for the demo provider. Never a client secret. */
+  clientId?: string | null;
 }
 
 const parsePayload = (plaintext: string): StoredProviderCredential => {
@@ -24,6 +26,7 @@ const parsePayload = (plaintext: string): StoredProviderCredential => {
     expiresAt: value.expiresAt ?? null,
     scopes: value.scopes ?? "",
     tokenType: value.tokenType ?? "bearer",
+    clientId: value.clientId ?? null,
   };
 };
 
@@ -75,6 +78,10 @@ export const loadConnectionCredential = async (connectionId: string): Promise<St
     throw new AppError(401, "CREDENTIAL_MISSING", "This connection has no stored provider credential.");
   }
   return parsePayload(decryptSecret(row.ciphertext));
+};
+
+export const deleteStoredSecret = async (connectionId: string): Promise<void> => {
+  await getDatabase().delete(connectionSecrets).where(eq(connectionSecrets.connectionId, connectionId));
 };
 
 export const deleteConnectionCredential = async (connectionId: string): Promise<StoredProviderCredential | null> => {

@@ -39,6 +39,11 @@ export const discoverProviderTools = async (connectionId: string): Promise<void>
   await apiRequest(`/api/connections/${connectionId}/validate`, { method: "POST" });
 };
 
+export const startDemoAuthorization = async (): Promise<string> => {
+  const body = await apiRequest<{ authorizationUrl: string }>("/api/oauth/demo/start", { method: "POST" });
+  return body.authorizationUrl;
+};
+
 export const startGithubAuthorization = async (): Promise<string> => {
   const body = await apiRequest<{ authorizationUrl: string }>("/api/oauth/github/start", { method: "POST" });
   return body.authorizationUrl;

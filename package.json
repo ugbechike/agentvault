@@ -14,6 +14,7 @@
     "typecheck": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web typecheck",
     "lint": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web lint",
     "test": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web test",
+    "seed:demo:production": "pnpm --filter @agentvault/api seed:demo:production",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

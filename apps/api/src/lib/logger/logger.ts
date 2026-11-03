@@ -8,6 +8,14 @@ export const loggerOptions: FastifyServerOptions["logger"] =
     ? false
     : {
         level: env.LOG_LEVEL,
+        serializers: {
+          req(request: { method?: string; url?: string }) {
+            return {
+              method: request.method,
+              url: request.url?.replace(/([?&])(code|state|token)=[^&]*/g, "$1$2=[redacted]"),
+            };
+          },
+        },
         redact: {
           paths: [
             "req.headers.authorization",
@@ -20,6 +28,9 @@ export const loggerOptions: FastifyServerOptions["logger"] =
             "authorization",
             "DATABASE_URL",
             "JWT_SECRET",
+            "req.query.code",
+            "req.query.state",
+            "req.query.token",
           ],
           censor: "[redacted]",
         },

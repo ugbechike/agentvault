@@ -20,6 +20,7 @@ export const ConnectorCard = ({
   connected: boolean;
 }) => {
   const available = entry.status === "available";
+  const actionLabel = entry.provider === "demo" ? "Connect Demo Provider" : connectLabel(entry.name);
 
   return (
     <Card className="flex h-full flex-col">
@@ -47,7 +48,7 @@ export const ConnectorCard = ({
           ) : (
             <>
               <Link href={`/connectors/${entry.provider}/connect`}>
-                <Button>{connectLabel(entry.name)}</Button>
+                <Button>{actionLabel}</Button>
               </Link>
               <Link href={`/connectors/${entry.provider}`}>
                 <Button variant="secondary">{manageConnectionLabel}</Button>

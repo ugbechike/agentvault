@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AgentAccess } from "@/components/agents/agent-access";
+import { InspectorGuide } from "@/components/mcp/inspector-guide";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,13 +45,18 @@ export const AgentListView = () => {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Workspace"
-        title="Agents"
-        description="An agent is one external MCP client. Each registration gets its own credential. New agents start with no access."
+        eyebrow="Agents"
+        title="Agent Connections"
+        description="An agent connection is one external MCP client. Each registration gets its own credential. New connections start with no access."
         actions={
-          <Link href="/agents/new">
-            <Button>Register agent</Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/agents/new?preset=inspector">
+              <Button>Register MCP Inspector</Button>
+            </Link>
+            <Link href="/agents/new">
+              <Button variant="secondary">Register another agent</Button>
+            </Link>
+          </div>
         }
       />
       {error ? <Alert tone="bad">{error}</Alert> : null}
@@ -84,17 +90,18 @@ export const AgentListView = () => {
   );
 };
 
-export const RegisterAgentForm = () => {
+export const RegisterAgentForm = ({ preset }: { preset?: "inspector" }) => {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
+  const inspector = preset === "inspector";
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Agents"
-        title="Register an agent"
-        description="Name the client, such as My Cursor. AgentVault issues a credential once. New agents start with no access."
+        title={inspector ? "Register MCP Inspector" : "Register an agent"}
+        description="Name the client. AgentVault issues a credential once. New connections start with no access."
       />
       <Card>
         <form
@@ -125,13 +132,17 @@ export const RegisterAgentForm = () => {
         >
           {error ? <Alert tone="bad">{error}</Alert> : null}
           <Field label="Name" htmlFor="agent-name">
-            <TextInput id="agent-name" name="name" placeholder="My Cursor" />
+            <TextInput id="agent-name" name="name" placeholder="MCP Inspector" defaultValue={inspector ? "MCP Inspector" : undefined} />
           </Field>
           <Field label="Description" htmlFor="agent-description">
-            <TextArea id="agent-description" name="description" />
+            <TextArea
+              id="agent-description"
+              name="description"
+              defaultValue={inspector ? "Local MCP Inspector used to test this account." : undefined}
+            />
           </Field>
           <Field label="Client" htmlFor="clientKind">
-            <SelectInput id="clientKind" name="clientKind" defaultValue="cursor">
+            <SelectInput id="clientKind" name="clientKind" defaultValue={inspector ? "custom" : "cursor"}>
               <option value="cursor">Cursor</option>
               <option value="claude-code">Claude Code</option>
               <option value="custom">Custom agent</option>
@@ -211,6 +222,7 @@ export const AgentDetailView = ({ agentId }: { agentId: string }) => {
       )}
       {agent.status === "revoked" ? <Alert tone="bad">This agent&apos;s access has been revoked.</Alert> : null}
       <AgentAccess agent={agent} />
+      <InspectorGuide />
       <Card className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-soft">Revoke removes this credential and its permissions immediately.</p>
         {confirming ? (

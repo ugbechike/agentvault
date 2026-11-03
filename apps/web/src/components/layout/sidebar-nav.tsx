@@ -1,27 +1,16 @@
 "use client";
 
-import {
-  Bot,
-  KeyRound,
-  LayoutDashboard,
-  ScrollText,
-  Settings,
-  Unplug,
-  Vault,
-  Waypoints,
-} from "lucide-react";
+import { Bot, LayoutDashboard, ScrollText, Settings, Unplug, Vault } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/cn";
 
 const items = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/connectors", label: "Connectors", icon: Unplug },
-  { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/permissions", label: "Permissions", icon: KeyRound },
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/connectors", label: "Provider Connections", icon: Unplug },
+  { href: "/agents", label: "Agent Connections", icon: Bot },
   { href: "/activity", label: "Activity", icon: ScrollText },
-  { href: "/mcp", label: "MCP access", icon: Waypoints },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

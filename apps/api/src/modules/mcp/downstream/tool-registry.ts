@@ -48,7 +48,7 @@ export const listAdvertisedTools = async (agentId: string): Promise<readonly Adv
  
   for (const row of rows) {
     const provider = providerByConnection.get(row.connectionId);
-    if (!provider || !isProviderId(provider)) continue;
+    if (provider !== "demo" || !isProviderId(provider)) continue;
     const tool = mapUpstreamTool({
       connectionId: row.connectionId,
       provider,

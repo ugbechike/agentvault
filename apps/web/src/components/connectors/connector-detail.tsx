@@ -78,13 +78,13 @@ export const ConnectorDetail = ({ provider, oauth }: { provider: string; oauth?:
         actions={
           connected ? undefined : (
             <Link href={`/connectors/${provider}/connect`}>
-              <Button>{connectLabel(entry.name)}</Button>
+              <Button>{provider === "demo" ? "Connect Demo Provider" : connectLabel(entry.name)}</Button>
             </Link>
           )
         }
       />
-      {oauth === "connected" ? <Alert tone="good">GitHub authorization finished. Capabilities below come from the remote MCP server.</Alert> : null}
-      {oauth === "error" ? <Alert tone="bad">GitHub authorization did not finish. The connection is not marked successful.</Alert> : null}
+      {oauth === "connected" ? <Alert tone="good">Authorization finished. The actions below come from the provider.</Alert> : null}
+      {oauth === "error" ? <Alert tone="bad">Authorization did not finish. The connection is not marked successful.</Alert> : null}
       {error ? <Alert tone="bad">{error}</Alert> : null}
       {actionError ? <Alert tone="bad">{actionError}</Alert> : null}
       {connection?.statusDetail ? <Alert tone={connected ? "neutral" : "warn"}>{connection.statusDetail}</Alert> : null}
@@ -96,8 +96,8 @@ export const ConnectorDetail = ({ provider, oauth }: { provider: string; oauth?:
           </div>
           <p className="text-sm leading-6 text-ink-soft">
             {connected
-              ? `Signed in to ${entry.name} as ${connection?.providerAccountId ?? "your account"}. Choose which agents can use it.`
-              : `Connect ${entry.name} with your own account, then choose which agents can use it.`}
+              ? `${entry.name} is connected. Choose which agents can use the actions below.`
+              : `Connect ${entry.name}, then choose which agents can use it.`}
           </p>
           <p className="text-sm text-ink-soft">Updated: {connection?.updatedAt ? formatTimestamp(connection.updatedAt) : "Never"}</p>
           <div className="flex flex-wrap gap-2">

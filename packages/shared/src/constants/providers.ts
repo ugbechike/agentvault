@@ -1,4 +1,4 @@
-export const connectableProviders = ["github", "supabase"] as const;
+export const connectableProviders = ["demo", "github", "supabase"] as const;
 
 export type ProviderId = (typeof connectableProviders)[number];
 
@@ -20,19 +20,27 @@ export interface ConnectorCatalogEntry {
  */
 export const connectorCatalog: readonly ConnectorCatalogEntry[] = [
   {
+    provider: "demo",
+    name: "Demo MCP Provider",
+    description: "Connect to a safe test service and explore how AgentVault manages AI agent access to external tools.",
+    status: "available",
+    authModel: "Approve the demo provider, then choose which of its actions each agent can call.",
+    capabilities: ["Synthetic read actions", "Per-agent access", "Disconnect at any time"],
+  },
+  {
     provider: "github",
     name: "GitHub",
     description: "Let agents read repositories and files, and open issues, when you allow it.",
-    status: "available",
-    authModel: "Choose which agents can use GitHub, and whether they can only read or also make changes.",
+    status: "planned",
+    authModel: "Coming soon. You will choose which agents can use GitHub.",
     capabilities: ["Read files and commits", "Read and open issues", "Read or write access for each agent"],
   },
   {
     provider: "supabase",
     name: "Supabase",
     description: "Let agents work with one Supabase project. SQL execution is not offered as a read-only action.",
-    status: "available",
-    authModel: "Supabase authorization is unavailable until a project-scoped OAuth client is configured.",
+    status: "planned",
+    authModel: "Coming soon. You will choose which agents can use a Supabase project.",
     capabilities: ["List project tables", "Read-only project scope", "No arbitrary SQL"],
   },
   {

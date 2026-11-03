@@ -12,7 +12,7 @@ import { apiRequest } from "@/modules/api/client";
 import { listAgents, type AgentSummary } from "@/modules/agents/agent-api";
 import { connectableProviders, type ProviderId } from "@agentvault/shared";
 
-const providerLabel: Record<ProviderId, string> = { github: "GitHub", supabase: "Supabase" };
+const providerLabel: Record<ProviderId, string> = { demo: "Demo MCP Provider", github: "GitHub", supabase: "Supabase" };
 
 export const PermissionBoard = () => {
   const { connections, error } = useProviderConnections();

@@ -1,17 +1,12 @@
-import {
-  forgotPasswordSchema,
-  loginSchema,
-  refreshSessionSchema,
-  registerSchema,
-} from "@agentvault/shared";
+import { forgotPasswordSchema, loginSchema, refreshSessionSchema } from "@agentvault/shared";
 import type { FastifyInstance } from "fastify";
 
+import { AppError } from "@/lib/errors/app-error";
 import * as authService from "@/modules/auth/services/auth.service";
 
 export const registerAuthRoutes = (app: FastifyInstance): void => {
-  app.post("/api/auth/register", async (request) => {
-    const body = registerSchema.parse(request.body);
-    return authService.register(body);
+  app.post("/api/auth/register", async () => {
+    throw new AppError(403, "REGISTRATION_DISABLED", "Registration is not available. Sign in with a provided demo account.");
   });
 
   app.post("/api/auth/login", async (request) => {

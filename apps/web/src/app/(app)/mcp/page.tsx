@@ -1,9 +1,7 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { McpAccess } from "@/components/mcp/mcp-access";
-
-export const metadata: Metadata = { title: "MCP access" };
-
-const McpPage = () => <McpAccess />;
+const McpPage = () => {
+  redirect("/agents");
+};
 
 export default McpPage;

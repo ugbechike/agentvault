@@ -1,9 +1,11 @@
 import type { ProviderId } from "@agentvault/shared";
 
 import { AppError } from "@/lib/errors/app-error";
+import { DEMO_REMOTE_MCP_URL } from "@/modules/connectors/adapters/demo/demo.adapter";
 import { GITHUB_REMOTE_MCP_URL } from "@/modules/connectors/adapters/github/github.adapter";
 import { SUPABASE_REMOTE_MCP_URL } from "@/modules/connectors/adapters/supabase/supabase.adapter";
-import { refreshGithubCredential } from "@/modules/connectors/oauth/github-oauth";
+import { refreshDemoCredential } from "@/modules/connectors/oauth/demo-oauth";
+import { assertPublicDemoProvider } from "@/modules/connectors/public-demo";
 import { loadConnectionCredential } from "@/modules/connectors/services/credential-store";
 import { getConnection } from "@/modules/connectors/services/connection.service";
 
@@ -19,6 +21,7 @@ export interface ManagedUpstreamClient {
 const clients = new Map<string, ManagedUpstreamClient>();
 
 const endpoints: Record<ProviderId, string> = {
+  demo: DEMO_REMOTE_MCP_URL,
   github: GITHUB_REMOTE_MCP_URL,
   supabase: SUPABASE_REMOTE_MCP_URL,
 };
@@ -27,16 +30,17 @@ const currentToken = async (connectionId: string, provider: ProviderId): Promise
   const credential = await loadConnectionCredential(connectionId);
   const expiresAt = credential.expiresAt ? Date.parse(credential.expiresAt) : Number.NaN;
   if (Number.isFinite(expiresAt) && expiresAt < Date.now() + 30_000) {
-    if (provider !== "github") {
+    if (provider !== "demo") {
       throw new AppError(401, "CREDENTIAL_EXPIRED", "The provider credential expired.");
     }
-    return refreshGithubCredential(connectionId);
+    return refreshDemoCredential(connectionId);
   }
   return credential.accessToken;
 };
 
 export const connectUpstream = async (connectionId: string): Promise<ManagedUpstreamClient> => {
   const connection = await getConnection(connectionId);
+  assertPublicDemoProvider(connection.provider);
   const existing = clients.get(connectionId);
   if (existing && existing.userId === connection.userId) return existing;
   if (existing) await disconnectUpstream(connectionId);
@@ -53,7 +57,7 @@ export const connectUpstream = async (connectionId: string): Promise<ManagedUpst
     {
       token: () => currentToken(connection.id, connection.provider),
       onUnauthorized: async () => {
-        if (connection.provider === "github") await refreshGithubCredential(connection.id);
+        if (connection.provider === "demo") await refreshDemoCredential(connection.id);
       },
     },
   );

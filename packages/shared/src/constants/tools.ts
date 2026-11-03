@@ -26,8 +26,53 @@ export interface IllustrativeTool {
 /**
  * Explicit gateway allowlist. Discovery may return more tools; only these names are exposed.
  * `execute_sql` is intentionally absent: arbitrary SQL is not a read-only capability.
+ *
+ * Demo tools are the synthetic read actions on the official example MCP server.
+ * `sampleLLM`, `elicitInputs`, `longRunningOperation`, and `mcp_apps_hello_world` are
+ * discovered and stored disabled: they need sampling, elicitation, progress streaming,
+ * or an interactive app, and none of them is a write to stored data.
  */
 export const illustrativeAllowlist: readonly IllustrativeTool[] = [
+  {
+    agentvaultName: "demo_echo",
+    provider: "demo",
+    requiredCapability: "demo.read",
+    description: "Echo a message. The demo provider returns the same text and does not store it.",
+    exampleUpstreamName: "echo",
+    resourceScope: "none",
+  },
+  {
+    agentvaultName: "demo_add",
+    provider: "demo",
+    requiredCapability: "demo.read",
+    description: "Add two numbers. The result is calculated and not stored.",
+    exampleUpstreamName: "add",
+    resourceScope: "none",
+  },
+  {
+    agentvaultName: "demo_get_tiny_image",
+    provider: "demo",
+    requiredCapability: "demo.read",
+    description: "Return a small built-in image from the demo provider.",
+    exampleUpstreamName: "getTinyImage",
+    resourceScope: "none",
+  },
+  {
+    agentvaultName: "demo_annotated_message",
+    provider: "demo",
+    requiredCapability: "demo.read",
+    description: "Return a sample message with annotation metadata.",
+    exampleUpstreamName: "annotatedMessage",
+    resourceScope: "none",
+  },
+  {
+    agentvaultName: "demo_get_resource_reference",
+    provider: "demo",
+    requiredCapability: "demo.read",
+    description: "Return a reference to one of the demo provider's sample resources.",
+    exampleUpstreamName: "getResourceReference",
+    resourceScope: "none",
+  },
   {
     agentvaultName: "github_get_file",
     provider: "github",

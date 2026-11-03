@@ -6,8 +6,9 @@ import { getDatabase } from "@/db/client";
 import { connectorDefinitions, discoveredTools, userConnections } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
 import { getConnectorAdapter } from "@/modules/connectors/registry/connector-registry";
-import { deleteConnectionCredential } from "@/modules/connectors/services/credential-store";
-import { revokeGithubCredential } from "@/modules/connectors/oauth/github-oauth";
+import { revokeDemoCredential } from "@/modules/connectors/oauth/demo-oauth";
+import { assertPublicDemoProvider } from "@/modules/connectors/public-demo";
+import { deleteConnectionCredential, deleteStoredSecret } from "@/modules/connectors/services/credential-store";
 
 const asCapabilities = (value: unknown): CapabilityId[] => {
   if (!Array.isArray(value)) return [];
@@ -89,18 +90,8 @@ export const listConnections = async (userId: string) => {
 };
 
 export const createConnection = async (_userId: string, input: CreateConnectionInput): Promise<never> => {
-  if (input.provider === "github") {
-    throw new AppError(
-      400,
-      "OAUTH_REQUIRED",
-      "GitHub connections start from authorization. Use the Connect GitHub action.",
-    );
-  }
-  throw new AppError(
-    503,
-    "SUPABASE_OAUTH_UNAVAILABLE",
-    "Supabase stays disconnected until a project-scoped OAuth client is configured. Arbitrary SQL is not exposed as a read-only tool.",
-  );
+  assertPublicDemoProvider(input.provider);
+  throw new AppError(400, "OAUTH_REQUIRED", "Demo connections start from the Connect Demo Provider action.");
 };
 
 const loadConnection = async (connectionId: string): Promise<LoadedConnection> => {
@@ -155,11 +146,15 @@ export const deleteConnection = async (userId: string, connectionId: string) => 
   if (connection.userId !== userId) {
     throw new AppError(404, "CONNECTION_NOT_FOUND", "Connection not found.");
   }
-  const adapter = getConnectorAdapter(connection.provider);
-  await adapter.disconnect({ connectionId: connection.id, provider: connection.provider });
-  const credential = await deleteConnectionCredential(connection.id);
-  if (connection.provider === "github" && credential) {
-    await revokeGithubCredential(credential.accessToken);
+  if (connection.provider === "demo") {
+    const adapter = getConnectorAdapter(connection.provider);
+    await adapter.disconnect({ connectionId: connection.id, provider: connection.provider });
+    const credential = await deleteConnectionCredential(connection.id);
+    if (credential) await revokeDemoCredential(credential);
+  } else {
+    const { disconnectUpstream } = await import("@/modules/mcp/upstream/client-manager");
+    await disconnectUpstream(connection.id);
+    await deleteStoredSecret(connection.id);
   }
   const [updated] = await getDatabase()
     .update(userConnections)
@@ -180,6 +175,7 @@ export const validateConnection = async (userId: string, connectionId: string) =
   if (connection.userId !== userId) {
     throw new AppError(404, "CONNECTION_NOT_FOUND", "Connection not found.");
   }
+  assertPublicDemoProvider(connection.provider);
   if (!connection.encryptedCredentialReference) {
     throw new AppError(400, "CREDENTIAL_MISSING", "This connection has no stored credential.");
   }

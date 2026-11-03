@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
 
-import { loginAccount, registerAccount } from "@/modules/auth/dashboard-auth";
+import { loginAccount } from "@/modules/auth/dashboard-auth";
 import {
   mockForgotPassword,
   type AuthSuccess,
@@ -51,7 +51,11 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
         updateDemo((current) => demoReducer(current, { type: "sign-in", session }));
         return { ok: true, message: result.message, session };
       },
-      signUp: async (input) => registerAccount(input),
+      signUp: async () => ({
+        ok: false,
+        formError: "Registration is not available.",
+        fieldErrors: {},
+      }),
       forgotPassword: async (input) => {
         await wait(450);
         return mockForgotPassword(input);

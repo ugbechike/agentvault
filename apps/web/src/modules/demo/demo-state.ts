@@ -26,8 +26,11 @@ export type DemoAction =
   | { type: "clear-tool-policies"; agentId: string; toolNames: readonly string[] }
   | { type: "reset-workspace" };
 
-const providerOf = (capability: CapabilityId): ProviderId =>
-  capability.startsWith("github.") ? "github" : "supabase";
+const providerOf = (capability: CapabilityId): ProviderId => {
+  if (capability.startsWith("github.")) return "github";
+  if (capability.startsWith("demo.")) return "demo";
+  return "supabase";
+};
 
 const upsertPermission = (
   permissions: DemoPermission[],

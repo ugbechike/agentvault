@@ -1,4 +1,7 @@
+import type { ProviderId } from "./providers";
+
 export const capabilityIds = [
+  "demo.read",
   "github.read",
   "github.write",
   "supabase.read",
@@ -9,12 +12,18 @@ export type CapabilityId = (typeof capabilityIds)[number];
 
 export interface CapabilityDefinition {
   id: CapabilityId;
-  provider: "github" | "supabase";
+  provider: ProviderId;
   label: string;
   description: string;
 }
 
 export const capabilityCatalog: readonly CapabilityDefinition[] = [
+  {
+    id: "demo.read",
+    provider: "demo",
+    label: "Demo read",
+    description: "Call the synthetic read actions published by the demo provider.",
+  },
   {
     id: "github.read",
     provider: "github",

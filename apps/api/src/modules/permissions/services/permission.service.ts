@@ -10,6 +10,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDatabase } from "@/db/client";
 import { agentPermissions, agentResourceGrants, agents, agentToolPolicies, connectorDefinitions, userConnections } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
+import { assertPublicDemoProvider } from "@/modules/connectors/public-demo";
 import { getConnection } from "@/modules/connectors/services/connection.service";
 import { evaluateEffectiveAccess } from "@/modules/permissions/policies/effective-access";
 
@@ -36,6 +37,15 @@ export const listPermissions = async (userId: string) => {
     .from(agentPermissions)
     .innerJoin(agents, eq(agentPermissions.agentId, agents.id))
     .where(eq(agents.userId, userId));
+  const toolPolicies = await getDatabase()
+    .select({
+      agentId: agentToolPolicies.agentId,
+      toolName: agentToolPolicies.toolName,
+      allowed: agentToolPolicies.allowed,
+    })
+    .from(agentToolPolicies)
+    .innerJoin(agents, eq(agentToolPolicies.agentId, agents.id))
+    .where(eq(agents.userId, userId));
   const resources = await getDatabase()
     .select({
       agentId: agentResourceGrants.agentId,
@@ -49,6 +59,7 @@ export const listPermissions = async (userId: string) => {
   return {
     permissions: rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
     resources,
+    tools: toolPolicies,
   };
 };
 
@@ -76,6 +87,7 @@ export const putPermission = async (userId: string, input: PutAgentPermissionInp
   await requireOwnedAgent(userId, input.agentId);
   const connection = await getConnection(input.connectionId);
   if (connection.userId !== userId) throw new AppError(404, "CONNECTION_NOT_FOUND", "Connection not found.");
+  assertPublicDemoProvider(connection.provider);
   if (input.allowed && !connection.grantedCapabilities.includes(input.capability)) {
     throw new AppError(403, "PROVIDER_SCOPE_MISSING", "The provider authorization does not include that capability.");
   }
@@ -88,11 +100,14 @@ export const saveAgentAccess = async (userId: string, agentId: string, input: Sa
   if (agent.status !== "active") throw new AppError(409, "AGENT_REVOKED", "Revoked agents cannot receive new access.");
   const connection = await getConnection(input.connectionId);
   if (connection.userId !== userId) throw new AppError(404, "CONNECTION_NOT_FOUND", "Connection not found.");
-  const readCapability = (connection.provider === "github" ? "github.read" : "supabase.read") as CapabilityId;
-  const writeCapability = (connection.provider === "github" ? "github.write" : "supabase.write") as CapabilityId;
-  const write = input.write;
+  assertPublicDemoProvider(connection.provider);
+  if (input.write) {
+    throw new AppError(403, "PROVIDER_SCOPE_MISSING", "This provider does not include a write action.");
+  }
+  const readCapability: CapabilityId = "demo.read";
+  const write = false;
   const read = input.read || write;
-  if ((read && !connection.grantedCapabilities.includes(readCapability)) || (write && !connection.grantedCapabilities.includes(writeCapability))) {
+  if (read && !connection.grantedCapabilities.includes(readCapability)) {
     throw new AppError(403, "PROVIDER_SCOPE_MISSING", "That access is wider than the provider authorization.");
   }
   for (const resource of input.resources) {
@@ -104,7 +119,6 @@ export const saveAgentAccess = async (userId: string, agentId: string, input: Sa
     }
   }
   await upsertCapability(agentId, input.connectionId, readCapability, read);
-  await upsertCapability(agentId, input.connectionId, writeCapability, write);
 
   const db = getDatabase();
   await db

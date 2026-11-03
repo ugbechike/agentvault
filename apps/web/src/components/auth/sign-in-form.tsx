@@ -35,10 +35,10 @@ export const SignInForm = () => {
       }}
     >
       <div>
-        <p className="text-xs font-medium tracking-[0.16em] text-copper uppercase">Sign in</p>
-        <h1 className="mt-2 font-serif text-4xl">Welcome back</h1>
+        <p className="text-xs font-medium tracking-[0.16em] text-copper uppercase">AgentVault Demo</p>
+        <h1 className="mt-2 font-serif text-4xl">AgentVault Demo</h1>
         <p className="mt-2 text-sm leading-6 text-ink-soft">
-          Use the email and password from the account you created.
+          Sign in with your provided demo credentials to explore secure MCP connections and agent permissions.
         </p>
       </div>
       {formError ? <Alert tone="bad">{formError}</Alert> : null}
@@ -51,12 +51,9 @@ export const SignInForm = () => {
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
-      <p className="flex justify-between text-sm text-ink-soft">
+      <p className="text-sm text-ink-soft">
         <Link href="/forgot-password" className="underline">
           Forgot password
-        </Link>
-        <Link href="/sign-up" className="underline">
-          Create an account
         </Link>
       </p>
     </form>

@@ -5,7 +5,7 @@ import { connectorDefinitions } from "@/db/schema";
 
 export const seedConnectorCatalog = async (): Promise<void> => {
   const rows = connectorCatalog
-    .filter((entry) => entry.provider === "github" || entry.provider === "supabase")
+    .filter((entry) => entry.provider === "demo" || entry.provider === "github" || entry.provider === "supabase")
     .map((entry) => ({
       provider: entry.provider,
       name: entry.name,

@@ -13,7 +13,7 @@ import { useBrowserSession } from "@/hooks/use-browser-session";
 import { useProviderConnections } from "@/hooks/use-provider-connections";
 import { apiRequest } from "@/modules/api/client";
 import { listAgents, type AgentSummary } from "@/modules/agents/agent-api";
-import { connectorCatalog, connectableProviders } from "@agentvault/shared";
+import { connectorCatalog } from "@agentvault/shared";
 
 const providerName = (provider: string): string => connectorCatalog.find((entry) => entry.provider === provider)?.name ?? provider;
 
@@ -37,14 +37,14 @@ export const DashboardView = () => {
       <PageHeader
         eyebrow="Workspace"
         title={`Hello, ${session?.name.split(" ")[0] ?? "there"}`}
-        description="Connect GitHub with your account, register an agent, then choose what that agent can do."
+        description="Connect a provider, configure agent access, test MCP tools, and review activity."
         actions={
           <>
-            <Link href="/connectors/github/connect">
-              <Button variant="secondary">Connect GitHub</Button>
+            <Link href="/connectors/demo/connect">
+              <Button variant="secondary">Connect Demo Provider</Button>
             </Link>
-            <Link href="/agents/new">
-              <Button>Register an agent</Button>
+            <Link href="/agents/new?preset=inspector">
+              <Button>Register MCP Inspector</Button>
             </Link>
           </>
         }
@@ -75,14 +75,17 @@ export const DashboardView = () => {
         <Card className="space-y-4">
           <h2 className="font-serif text-2xl">Connection health</h2>
           <ApiStatus />
-          {connectableProviders.map((provider) => {
+          {connectorCatalog
+            .filter((entry) => entry.status === "available")
+            .map((entry) => entry.provider)
+            .map((provider) => {
             const match = connections.find((connection) => connection.provider === provider);
             const label = match?.status === "connected" ? connectedStatus : match?.status === "error" ? attentionStatus : notConnectedStatus;
             return (
               <div key={provider} className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">{providerName(provider)}</p>
-                  <p className="text-sm text-ink-soft">{match?.status === "connected" ? match.providerAccountId : label}</p>
+                  <p className="text-sm text-ink-soft">{label}</p>
                 </div>
                 <Badge tone={match?.status === "connected" ? "good" : "neutral"}>{label}</Badge>
               </div>

@@ -1,9 +1,7 @@
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { PermissionBoard } from "@/components/permissions/permission-board";
-
-export const metadata: Metadata = { title: "Permissions" };
-
-const PermissionsPage = () => <PermissionBoard />;
+const PermissionsPage = () => {
+  redirect("/agents");
+};
 
 export default PermissionsPage;

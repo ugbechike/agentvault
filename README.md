@@ -1,6 +1,8 @@
 # AgentVault POC
 
-MCP gateway and permission broker. A person signs in, authorizes their own GitHub account, registers an external MCP client, and AgentVault checks that client's permissions before it calls GitHub's remote MCP server.
+MCP gateway and permission broker for a safe public demo. A person signs in with a provisioned demo account, approves the hosted demo MCP provider, registers an MCP Inspector connection, and AgentVault checks that connection's permissions before it calls the demo provider.
+
+GitHub and Supabase adapters remain in the codebase. The public demo does not start those connections.
 
 ## Run locally
 
@@ -17,7 +19,7 @@ pnpm dev
 - API: http://localhost:4000/health
 - Downstream MCP: http://localhost:4000/mcp
 
-Create an account in the web app. GitHub connects only through the OAuth callback. A shared `GITHUB_MCP_TOKEN` is not a user connection.
+Public registration is disabled. Sign in with a demo account created by `pnpm seed:demo:production`. The demo provider connects through its own authorization callback. A shared provider token is not a connection.
 
 Register the OAuth app callback as `{API_PUBLIC_URL}/api/oauth/github/callback`.
 
@@ -48,10 +50,12 @@ Supabase stays disconnected. A project-scoped OAuth client is not configured, an
 
 ## Deploy
 
-Do not deploy until GitHub OAuth, `JWT_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, and `DATABASE_URL` are set in the host, and the OAuth callback uses the public API URL.
+Do not change production until these are set. Do not print secret values.
 
-- Vercel: this repository, with Root Directory `apps/web`, so the pnpm workspace can still install `@agentvault/shared`. Set `NEXT_PUBLIC_API_URL` to the Railway API origin. The GitHub OAuth callback stays on the API, not on Vercel.
-- Railway: repository root (`railway.toml`). Set `WEB_ORIGIN` to the Vercel origin and `API_PUBLIC_URL` to the Railway origin. Run `pnpm --filter @agentvault/api db:migrate` against the production database before serving traffic. `db:migrate` reads `agentvault-poc/.env` when `DATABASE_URL` is not already in the environment.
-- Health check: `GET /health`.
+- Vercel root directory `apps/web`. `NEXT_PUBLIC_API_URL` is the Railway API origin, for example `https://api-production-0c2b.up.railway.app`.
+- Railway root is this package (`railway.toml`). `WEB_ORIGIN` is the Vercel origin, for example `https://web-navy-pi-61.vercel.app`. `API_PUBLIC_URL` is the Railway origin. Keep `DATABASE_URL`, `JWT_SECRET`, and `CREDENTIAL_ENCRYPTION_KEY`. The demo provider uses dynamic registration and does not need a client secret.
+- The demo callback is `{API_PUBLIC_URL}/api/oauth/demo/callback`.
+- Apply existing migrations only after confirming the production schema. Then provision accounts with `CONFIRM_PRODUCTION_SEED=agentvault-demo DATABASE_URL=... DEMO_CREDENTIALS_FILE=/absolute/path/outside/the/repo.txt pnpm seed:demo:production`. The command prints the database host and name, not the connection string or passwords. Passwords are written once to that file, mode 0600.
+- Health check: `GET /health`. Downstream MCP: `POST /mcp`.
 
 Password reset email is not configured. Change a password from Settings after signing in.

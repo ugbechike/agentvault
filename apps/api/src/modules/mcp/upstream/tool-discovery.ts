@@ -38,8 +38,10 @@ export const syncDiscoveredTools = async (connectionId: string): Promise<Connect
     const match = illustrativeAllowlist.find(
       (entry) => entry.provider === connection.provider && entry.exampleUpstreamName === tool.upstreamName,
     );
-    const requiredCapability: CapabilityId = match?.requiredCapability ?? (connection.provider === "github" ? "github.read" : "supabase.read");
-    const expose = Boolean(match) && (connection.provider !== "supabase" || connection.readOnly);
+    const requiredCapability: CapabilityId =
+      match?.requiredCapability ??
+      (connection.provider === "github" ? "github.read" : connection.provider === "demo" ? "demo.read" : "supabase.read");
+    const expose = Boolean(match) && connection.provider === "demo";
     return {
       connectionId,
       upstreamToolName: tool.upstreamName,
@@ -57,8 +59,8 @@ export const syncDiscoveredTools = async (connectionId: string): Promise<Connect
     connectionId,
     "connected",
     enabled > 0
-      ? `Authorized as ${connection.providerAccountId ?? "the provider account"}. ${enabled} capabilities are available.`
-      : "Authorized, but none of the discovered tools are on the AgentVault allowlist.",
+      ? `${enabled} actions are available from the demo provider.`
+      : "Authorized, but none of the discovered tools are available.",
   );
   return { ok: true, checkedAt: new Date().toISOString() };
 };

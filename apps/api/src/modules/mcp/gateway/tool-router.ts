@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { getDatabase } from "@/db/client";
 import { connectorDefinitions, discoveredTools, userConnections } from "@/db/schema";
 import { AppError } from "@/lib/errors/app-error";
+import { assertPublicDemoProvider } from "@/modules/connectors/public-demo";
 import { invokeUpstreamTool } from "@/modules/mcp/upstream/tool-invocation";
 
 export interface RoutedToolCall {
@@ -18,6 +19,7 @@ export const routeToolCall = async (
 ): Promise<RoutedToolCall> => {
   const match = illustrativeAllowlist.find((tool) => tool.agentvaultName === agentvaultToolName);
   if (!match) throw new AppError(404, "TOOL_NOT_ALLOWLISTED", "That tool is not available.");
+  assertPublicDemoProvider(match.provider);
 
   const db = getDatabase();
   const rows = await db

@@ -2,6 +2,7 @@ import { Database, HardDrive, Mail, NotebookPen } from "lucide-react";
 import type { ReactNode } from "react";
 
 const marks: Record<string, ReactNode> = {
+  demo: <span className="font-serif text-lg">Dm</span>,
   github: <span className="font-serif text-lg">Gh</span>,
   supabase: <Database size={18} />,
   gmail: <Mail size={18} />,
