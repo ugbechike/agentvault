@@ -37,6 +37,8 @@ export const buildApp = async (): Promise<FastifyInstance> => {
   await app.register(cors, {
     origin: allowedOrigins,
     credentials: true,
+    // @fastify/cors defaults to GET,HEAD,POST. The dashboard also sends PUT, PATCH, and DELETE.
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
   });
 
   const databaseStatus = async (): Promise<string> => {
