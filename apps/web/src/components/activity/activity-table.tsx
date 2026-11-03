@@ -7,13 +7,13 @@ export const ActivityTable = () => {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Audit"
+        eyebrow="Activity"
         title="Activity"
-        description="Audit rows will list agent, connector, tool, decision, and result when the server records them."
+        description="A record of what your agents do with the connections you allow."
       />
       <Card>
         <p className="text-sm leading-6 text-ink-soft">
-          The audit API does not return events yet. This page stays empty rather than showing sample traffic.
+          Activity will appear here when agents use a connection.
         </p>
       </Card>
     </div>

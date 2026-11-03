@@ -36,7 +36,7 @@ export const SidebarNav = ({ onNavigate }: { onNavigate?: () => void }) => {
         </span>
         <span>
           <span className="block font-serif text-xl leading-none">AgentVault</span>
-          <span className="text-xs text-paper/60">Permission broker</span>
+          <span className="text-xs text-paper/60">Agent access</span>
         </span>
       </Link>
       <ul className="mt-8 space-y-1">

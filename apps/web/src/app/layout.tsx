@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     default: "AgentVault",
     template: "%s · AgentVault",
   },
-  description: "Experimental connector and permission broker for MCP agents.",
+  description: "Choose which services your agents can use, and what each agent is allowed to do.",
 };
 
 const RootLayout = ({ children }: { children: ReactNode }) => (

@@ -21,12 +21,14 @@ export const ApiStatus = () => {
   return (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <p className="text-sm font-medium">AgentVault API</p>
-        <p className="text-sm text-ink-soft">{apiBaseUrl()}/health</p>
+        <p className="text-sm font-medium">Workspace</p>
+        <p className="text-sm text-ink-soft">
+          {status === "ok" ? "Ready for connections" : status === "offline" ? "Unavailable right now" : "Checking status"}
+        </p>
       </div>
       {status === "loading" ? <Badge>Checking</Badge> : null}
-      {status === "ok" ? <Badge tone="good">Reachable</Badge> : null}
-      {status === "offline" ? <Badge tone="warn">Not running</Badge> : null}
+      {status === "ok" ? <Badge tone="good">Ready</Badge> : null}
+      {status === "offline" ? <Badge tone="warn">Unavailable</Badge> : null}
     </div>
   );
 };
