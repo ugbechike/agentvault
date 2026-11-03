@@ -46,7 +46,13 @@ Endpoint constant: `SUPABASE_REMOTE_MCP_URL = https://mcp.supabase.com/mcp`. Sco
 5. Add a connect flow under `apps/web` if the authorization steps differ.
 6. Extend `illustrativeAllowlist` only with names you are willing to expose. Leave `discoverTools` unimplemented until it calls `discoverUpstreamTools`.
 
-Planned catalog entries (`gmail`, `google-drive`, `notion`) have no adapter and no connect route. Their detail page says so.
+Planned catalog entries (`gmail`, `google-drive`, `notion`) have no adapter and no connect route. Their detail page says the connector is coming later.
+
+## Test credentials and product copy
+
+`createConnection` in `connection.service.ts` stores `encrypted_credential_reference` as the environment variable name `GITHUB_MCP_TOKEN` or `SUPABASE_MCP_TOKEN`. The secret stays in the API environment. Supabase also stores the project ref on `provider_account_id`. This step does not redirect to GitHub or Supabase OAuth.
+
+The connectors UI calls these **test connections**. Keep environment variable names, credential references, remote MCP URLs, transport details, and unfinished OAuth notes in this document or in development diagnostics such as the MCP access page. The marketplace, connect flows, connection detail, dashboard connection health, and agent access screens should say what the connection lets agents do and that the person chooses which agents can use it.
 
 ## Persistence
 

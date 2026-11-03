@@ -14,48 +14,49 @@ export interface ConnectorCatalogEntry {
 }
 
 /**
- * Product catalog. `available` means AgentVault has an adapter skeleton.
- * It does not mean a user has authorized the provider.
+ * Product catalog shown in the connectors UI.
+ * `available` means a person can save a connection. It does not mean they signed in with the provider.
+ * Keep implementation notes in docs/CONNECTORS_IMPLEMENTATION.md.
  */
 export const connectorCatalog: readonly ConnectorCatalogEntry[] = [
   {
     provider: "github",
     name: "GitHub",
-    description: "Repository, issue, and file tools through GitHub's hosted remote MCP server.",
+    description: "Let agents read repositories and files, and open issues, when you allow it.",
     status: "available",
-    authModel: "GitHub OAuth or a user-approved GitHub credential. Not implemented.",
-    capabilities: ["Read repositories and files", "Create issues", "Tool discovery from the remote MCP server"],
+    authModel: "Choose which agents can use GitHub, and whether they can only read or also make changes.",
+    capabilities: ["Read repositories and files", "Open issues", "Read or write access for each agent"],
   },
   {
     provider: "supabase",
     name: "Supabase",
-    description: "Project-scoped database and management tools through Supabase's hosted MCP server.",
+    description: "Let agents work with one Supabase project, and only in the ways you allow.",
     status: "available",
-    authModel: "Supabase OAuth scoped to one project. Not the same flow as GitHub.",
-    capabilities: ["List project tables", "Read-only queries", "Write access only when explicitly granted"],
+    authModel: "Name the project agents may use, then choose who can read it or make changes.",
+    capabilities: ["List project tables", "Run read queries", "Write access only when you allow it"],
   },
   {
     provider: "gmail",
     name: "Gmail",
-    description: "Mailbox tools for a future connector. No adapter exists in this POC.",
+    description: "Let agents read threads and send mail once Gmail can be connected.",
     status: "planned",
-    authModel: "Google OAuth. Not designed yet.",
+    authModel: "Coming soon. You will choose which agents can read mail or send it.",
     capabilities: ["Read threads", "Send mail"],
   },
   {
     provider: "google-drive",
     name: "Google Drive",
-    description: "File tools for a future connector. No adapter exists in this POC.",
+    description: "Let agents find and read files once Google Drive can be connected.",
     status: "planned",
-    authModel: "Google OAuth. Not designed yet.",
+    authModel: "Coming soon. You will choose which agents can browse and read files.",
     capabilities: ["List files", "Read file contents"],
   },
   {
     provider: "notion",
     name: "Notion",
-    description: "Workspace tools for a future connector. No adapter exists in this POC.",
+    description: "Let agents search and read pages once Notion can be connected.",
     status: "planned",
-    authModel: "Notion OAuth. Not designed yet.",
+    authModel: "Coming soon. You will choose which agents can search and read pages.",
     capabilities: ["Search pages", "Read page content"],
   },
 ];

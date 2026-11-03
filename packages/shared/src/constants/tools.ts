@@ -19,7 +19,7 @@ export const illustrativeAllowlist: readonly IllustrativeTool[] = [
     agentvaultName: "github_list_repositories",
     provider: "github",
     requiredCapability: "github.read",
-    description: "List repositories the connected GitHub account can see.",
+    description: "List repositories this GitHub connection can reach.",
     exampleUpstreamName: "list_repositories",
   },
   {

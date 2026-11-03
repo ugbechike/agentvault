@@ -19,24 +19,24 @@ export const capabilityCatalog: readonly CapabilityDefinition[] = [
     id: "github.read",
     provider: "github",
     label: "GitHub read",
-    description: "Read repositories, file contents, and issue metadata through the GitHub connector.",
+    description: "Read repositories, files, and issues on GitHub.",
   },
   {
     id: "github.write",
     provider: "github",
     label: "GitHub write",
-    description: "Create or modify GitHub resources, such as issues, when the provider grant includes write.",
+    description: "Open issues and make other GitHub changes when you allow this agent to write.",
   },
   {
     id: "supabase.read",
     provider: "supabase",
     label: "Supabase read",
-    description: "Read project metadata and run read-only database operations on the selected Supabase project.",
+    description: "View the selected Supabase project and run read-only queries.",
   },
   {
     id: "supabase.write",
     provider: "supabase",
     label: "Supabase write",
-    description: "Change data or schema on the selected Supabase project when the provider grant includes write.",
+    description: "Change data in the selected Supabase project when you allow this agent to write.",
   },
 ];
