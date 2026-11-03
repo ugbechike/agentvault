@@ -13,14 +13,14 @@ let database: Database | null = null;
 
 /**
  * Opens a pool on first use. Importing this module does not connect.
- * The scaffold never calls this during boot or from the 501 routes.
+ * Startup calls this when DATABASE_URL is set, for the health check and connector catalog seed.
  */
 export const getDatabase = (): Database => {
   if (!env.DATABASE_URL) {
     throw new AppError(
       503,
       "DATABASE_NOT_CONFIGURED",
-      "DATABASE_URL is not set. The API boots without a database; queries are not implemented.",
+      "DATABASE_URL is not set.",
     );
   }
 

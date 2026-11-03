@@ -4,36 +4,33 @@ AgentVault has three separate credentials. They are not interchangeable.
 
 ## 1. Dashboard authentication
 
-The person using the website.
+The person using the website. Accounts are created with `pnpm seed:demo:production`. Public registration is off.
 
 | Piece | File | Current behavior |
 | --- | --- | --- |
-| Routes | `apps/api/src/modules/auth/routes/auth.routes.ts` | `POST /api/auth/register`, `login`, `logout`, `refresh`, `forgot-password`, `GET /api/auth/session` validate with Zod, then 501. |
-| Service | `modules/auth/services/auth.service.ts` | Throws before any user row is written. |
-| Passwords | `modules/auth/services/password.service.ts` | `hash` and `verify` throw. Plaintext must never be logged or stored. |
-| JWT | `modules/auth/services/token.service.ts` | `issueDashboardSession`, `verifyAccessToken`, `rotateRefreshToken` throw. `JWT_SECRET` is parsed and unused. |
-| Users | `modules/auth/repositories/user.repository.ts` | Throws. Future reads go through `getDatabase()`. |
-| Profile | `modules/users/routes/users.routes.ts` | `GET` and `PATCH /api/users/me` return 501. |
+| Routes | `apps/api/src/modules/auth/routes/auth.routes.ts` | `POST /api/auth/register` returns 403 `REGISTRATION_DISABLED`. `login`, `logout`, `refresh`, and `GET /api/auth/session` use the service. `forgot-password` returns `{ ok: true }` and does not send mail. |
+| Service | `modules/auth/services/auth.service.ts` | Login loads the user, checks the password, and issues a session. |
+| Passwords | `modules/auth/services/password.service.ts` | `scrypt` hash and verify. Plaintext is never logged or stored. |
+| JWT | `modules/auth/services/token.service.ts` | HS256 access token (1 hour) and refresh token (14 days). Only the refresh token's SHA-256 hash is stored. |
+| Users | `modules/auth/repositories/user.repository.ts` | Reads and writes `users` through `getDatabase()`. |
+| Profile | `modules/users/routes/users.routes.ts` | `GET` and `PATCH /api/users/me`, and `POST /api/users/me/password`, require the dashboard bearer token. |
 
-The web sign-in screen calls `mockSignIn` in `apps/web/src/modules/auth/mock-auth.ts`. The only accepted password is the one printed on the form (`ada@agentvault.dev` / `vault-demo`). Sign-up writes a session to `localStorage` under `agentvault-poc-demo-v1`. The banner on every screen says this.
+The sign-in form calls `loginAccount` in `apps/web/src/modules/auth/dashboard-auth.ts`, which posts to `/api/auth/login`. The session is stored in `localStorage` under `agentvault-session-v1` and sent as `Authorization: Bearer`. `mockSignIn` in `mock-auth.ts` is only used by fixture tests. It is not the sign-in screen.
 
 ## 2. Provider authorization
 
-The grant AgentVault holds for GitHub or Supabase on behalf of the user.
+The grant AgentVault holds for a provider on behalf of the user.
 
-- GitHub: OAuth or another user-approved GitHub credential, then the remote MCP server at `https://api.githubcopilot.com/mcp/`. See `github.adapter.ts`.
-- Supabase: OAuth scoped to one project ref, then `https://mcp.supabase.com/mcp`. See `supabase.adapter.ts`. Do not reuse the GitHub token or the dashboard JWT.
+- Demo: OAuth against `https://example-server.modelcontextprotocol.io/mcp`, with a dynamically registered public client. No client secret. `POST /api/oauth/demo/start` begins it, and `GET /api/oauth/demo/callback` stores the token and discovers tools.
+- GitHub: OAuth code in `github-oauth.ts` and the remote MCP server at `https://api.githubcopilot.com/mcp/`. `POST /api/oauth/github/start` is rejected by the public-demo gate before that code runs.
+- Supabase: `initializeConnection` refuses the connector. `POST /api/oauth/supabase/start` is rejected by the same gate.
 
-`retrieveCredential` must return a `CredentialReference` string that points at a secret store. The column is `user_connections.encrypted_credential_reference`. Environment placeholders `GITHUB_OAUTH_*` and `SUPABASE_OAUTH_*` are optional and unread.
-
-The connect wizards set a browser flag. They do not redirect.
+The access token is encrypted in `connection_secrets`. `user_connections.encrypted_credential_reference` stores that row's id. `GITHUB_OAUTH_*` and `SUPABASE_OAUTH_*` are optional. GitHub's values are read only by the unused GitHub OAuth helper and the health check.
 
 ## 3. MCP consumer authentication
 
 The credential a Cursor or Claude Code process presents to AgentVault.
 
-`authenticateMcpConsumer` in `modules/auth/services/mcp-consumer-auth.service.ts` and `authenticateCaller` in `modules/mcp/downstream/tool-handlers.ts` both throw with `TODO(MCP-LEARNING): Authenticate MCP caller`.
+`authenticateMcpConsumer` in `modules/auth/services/mcp-consumer-auth.service.ts` hashes the bearer token and loads an unrevoked `agent_credentials` row for an active agent. `authenticateCaller` delegates to it and runs before the `/mcp` handler. A token with three dot-separated parts is rejected, so a dashboard JWT cannot be used as an MCP credential.
 
-That check belongs in front of `createMcpHandler`, which does not read tokens. The MCP access page shows `Bearer <MCP consumer credential — not issued>` and does not generate a token.
-
-A dashboard session cookie must not be accepted as an MCP bearer token unless you explicitly design that bridge later.
+Registering or rotating an agent returns `avmcp_…` once. The database stores the SHA-256 hash and a prefix.

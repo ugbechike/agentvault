@@ -1,23 +1,23 @@
 # MCP implementation
 
-Protocol behavior is intentionally absent. The functions below throw `NotImplementedError`. Do not replace that with a stub that returns an empty tool list or a successful tool result.
+`/mcp` is a Streamable HTTP MCP server on the Fastify process. Tool calls for the public demo go to the hosted demo provider after the allowlist and permission checks.
 
-## Intended call path
+## Call path
 
 ```text
 Cursor or Claude Code
   -> AgentVault downstream MCP server (Streamable HTTP, POST/GET/DELETE /mcp)
-  -> authenticate MCP caller
+  -> authenticate MCP caller (avmcp_ bearer token)
   -> tools/list or tools/call
   -> allowlist + evaluateEffectiveAccess
   -> gateway router
   -> AgentVault upstream MCP client
-  -> GitHub MCP (https://api.githubcopilot.com/mcp/)
-     or Supabase MCP (https://mcp.supabase.com/mcp?project_ref=...)
-  -> provider API
+  -> demo MCP (https://example-server.modelcontextprotocol.io/mcp)
 ```
 
-`/mcp` is registered in `apps/api/src/modules/mcp/routes.ts` and returns 501. Replace those routes with the real handler. Do not leave the 501 wrapper in front of a working server.
+GitHub (`https://api.githubcopilot.com/mcp/`) and Supabase (`https://mcp.supabase.com/mcp?project_ref=...&read_only=true`) are implemented in the upstream client. `assertPublicDemoProvider` rejects those providers before a public-demo call connects.
+
+`apps/api/src/modules/mcp/routes.ts` authenticates the caller, checks the origin against `WEB_ORIGIN` and `API_PUBLIC_URL`, and hands the Node request to `toNodeHandler`.
 
 ## SDK
 
@@ -28,51 +28,38 @@ Use MCP TypeScript SDK v2. Do not add `@modelcontextprotocol/sdk` (v1).
 | `@modelcontextprotocol/server@2.4.0` | yes | `McpServer`, `createMcpHandler` |
 | `@modelcontextprotocol/client@2.4.0` | yes | `Client`, `StreamableHTTPClientTransport`, `listTools`, `callTool` |
 | `@modelcontextprotocol/node@2.1.2` | yes | `toNodeHandler` for Fastify's Node request |
-| `@modelcontextprotocol/fastify@2.0.1` | yes | Host and Origin checks via `createMcpFastifyApp` options. Peer depends on server `^2.3.0`, so it matches server 2.4.0. |
+| `@modelcontextprotocol/fastify@2.0.1` | yes | Declared as a dependency. The app does not call it. `/mcp` is mounted on the existing Fastify server, and origin checks live in `routes.ts`. |
 
-v2 serves Streamable HTTP with `createMcpHandler(factory)`. The factory runs per request. Verify the bearer token before the handler and pass `authInfo`. The handler does not verify tokens itself.
+Zod in this repo is 4.x. Downstream tool registration uses `z.fromJSONSchema` on the discovered input schema.
 
-Zod in this repo is 4.x. SDK examples import `zod/v4` when a tool schema is registered. That registration belongs in your implementation, not in this scaffold.
+## Downstream
 
-## Downstream — start here
+| File | Behavior |
+| --- | --- |
+| `apps/api/src/modules/mcp/downstream/server.ts` | Builds a per-request `McpServer` and registers the tools advertised for that agent. |
+| `apps/api/src/modules/mcp/downstream/transport.ts` | `createMcpHandler` plus `toNodeHandler`, mounted at `/mcp`. The factory reads `authInfo.clientId` as the agent id. |
+| `apps/api/src/modules/mcp/downstream/tool-handlers.ts` | `handleToolsList` lists advertised tools. `handleToolsCall` checks access, routes, invokes, and writes an audit row. `authenticateCaller` delegates to `authenticateMcpConsumer`. |
+| `apps/api/src/modules/mcp/downstream/tool-registry.ts` | Enabled discovered tools that match the allowlist and the agent's grants. Unknown tools are not registered. |
 
-| File | Contract | TODO |
-| --- | --- | --- |
-| `apps/api/src/modules/mcp/downstream/server.ts` | `createDownstreamMcpServer(): DownstreamMcpServer` | `TODO(MCP-LEARNING): Implement downstream MCP server` |
-| `apps/api/src/modules/mcp/downstream/transport.ts` | `createDownstreamTransport()` mounts Streamable HTTP at `/mcp` | `TODO(MCP-LEARNING): Implement Streamable HTTP transport` |
-| `apps/api/src/modules/mcp/downstream/tool-handlers.ts` | `handleToolsList`, `handleToolsCall`, `authenticateCaller` | `TODO(MCP-LEARNING): Implement tools/list and tools/call integration` and `TODO(MCP-LEARNING): Authenticate MCP caller` |
-| `apps/api/src/modules/mcp/downstream/tool-registry.ts` | `listAdvertisedTools`, `requireAllowlistedTool` | Same tools/list TODO. Unknown tools are rejected. |
+The bearer token is verified in the route, before `createMcpHandler`. The handler does not verify tokens itself.
 
-`DownstreamMcpServer.createServer()` is typed as the SDK `McpServer`. `DownstreamTransport` is typed as the return of `createMcpHandler` and `toNodeHandler`. Nothing constructs them.
+## Upstream
 
-Suggested order when you implement:
+| File | Behavior |
+| --- | --- |
+| `apps/api/src/modules/mcp/upstream/client-factory.ts` | Opens a `Client` over `StreamableHTTPClientTransport`. The auth provider supplies the stored access token. Supabase URLs get `project_ref` and `read_only=true`. |
+| `apps/api/src/modules/mcp/upstream/client-manager.ts` | Caches one client per connection. Refreshes an expiring demo token. Rejects a non-demo provider. |
+| `apps/api/src/modules/mcp/upstream/tool-discovery.ts` | Calls `listTools()` and stores rows. Allowlist matches are enabled. |
+| `apps/api/src/modules/mcp/upstream/tool-invocation.ts` | Calls `callTool` and maps the result into `ToolCallResult`. |
 
-1. Authenticate the caller in front of the handler (`authenticateMcpConsumer` in `modules/auth/services/mcp-consumer-auth.service.ts`).
-2. Build a per-request `McpServer` that registers only `listAdvertisedTools` for that agent.
-3. On `tools/call`, resolve the AgentVault name, call `evaluateEffectiveAccess`, then `routeToolCall`.
-4. Mount with `toNodeHandler` on the existing Fastify app. Keep business routes on the same process or split them later; do not mix tool execution into `/api/*` handlers.
-
-## Upstream — start here
-
-| File | Contract | TODO |
-| --- | --- | --- |
-| `apps/api/src/modules/mcp/upstream/client-factory.ts` | `createUpstreamClient(config): Promise<UpstreamClientHandle>` | `TODO(MCP-LEARNING): Create upstream MCP client` |
-| `apps/api/src/modules/mcp/upstream/client-manager.ts` | `connectUpstream`, `disconnectUpstream` | `TODO(MCP-LEARNING): Connect to remote MCP server` |
-| `apps/api/src/modules/mcp/upstream/tool-discovery.ts` | `discoverUpstreamTools(connectionId)` | `TODO(MCP-LEARNING): Discover upstream tools` |
-| `apps/api/src/modules/mcp/upstream/tool-invocation.ts` | `invokeUpstreamTool(request)` | `TODO(MCP-LEARNING): Invoke upstream tool` |
-
-`UpstreamClientHandle` names the SDK `Client` and `StreamableHTTPClientTransport`. `UpstreamConnectionConfig` carries an endpoint and a credential reference, never a raw token. Provider auth headers are applied inside the adapter (`TODO(MCP-LEARNING): Handle upstream authentication`).
-
-Discovery should call the SDK `listTools()` and return `UpstreamToolDefinition` records. Invocation should call `callTool` and map the result into `ToolCallResult`. Connection failures should surface as `IntegrationError` or `NotImplementedError`'s replacement, without logging the bearer token.
+`UpstreamConnectionConfig` carries an endpoint and a credential reference. The access token is loaded from `connection_secrets` inside the client manager. Failures are returned as text tool errors or `AppError`s. Bearer tokens are not logged.
 
 ## Gateway
 
-| File | Behavior to add |
+| File | Behavior |
 | --- | --- |
-| `gateway/tool-mapper.ts` | Map one upstream tool onto one illustrative AgentVault name, or reject it. |
-| `gateway/tool-filter.ts` | Drop anything not on the allowlist. Filtering is not the authorization check. |
-| `gateway/tool-router.ts` | `routeToolCall` picks a single connection. `toSafeToolError` hides credentials. |
+| `gateway/tool-mapper.ts` | Maps one upstream tool onto one allowlist entry by provider and exact upstream name, or returns null. |
+| `gateway/tool-filter.ts` | Drops tools the agent lacks a capability grant or an allowed tool policy for. Filtering is not the authorization check. |
+| `gateway/tool-router.ts` | `routeToolCall` requires one connected account for that provider and an enabled discovered tool. `toSafeToolError` hides the upstream failure text. |
 
-Allowlist constants are `illustrativeAllowlist` in `packages/shared/src/constants/tools.ts`. Names such as `github_list_repositories` are AgentVault-facing examples. Compare them to real `tools/list` output before binding.
-
-Collisions: two connections must not publish the same AgentVault name. The router throws until you define that rule.
+Allowlist constants are `illustrativeAllowlist` in `packages/shared/src/constants/tools.ts`. Two connected accounts for the same provider make `routeToolCall` fail with `CONNECTION_UNAVAILABLE`.

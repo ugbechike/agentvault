@@ -10,7 +10,8 @@ GitHub and Supabase adapters remain in the codebase. The public demo does not st
 cd agentvault-poc
 pnpm install
 cp .env.example .env
-# Set DATABASE_URL, JWT_SECRET, and the GitHub OAuth app values. See .env.example.
+# Set DATABASE_URL and JWT_SECRET. See .env.example.
+# GitHub and Supabase OAuth values are optional. The public demo does not start those providers.
 pnpm --filter @agentvault/api db:migrate
 pnpm dev
 ```
@@ -19,9 +20,7 @@ pnpm dev
 - API: http://localhost:4000/health
 - Downstream MCP: http://localhost:4000/mcp
 
-Public registration is disabled. Sign in with a demo account created by `pnpm seed:demo:production`. The demo provider connects through its own authorization callback. A shared provider token is not a connection.
-
-Register the OAuth app callback as `{API_PUBLIC_URL}/api/oauth/github/callback`.
+Public registration is disabled. Sign in with a demo account created by `pnpm seed:demo:production`. The demo provider connects through `{API_PUBLIC_URL}/api/oauth/demo/callback`. A shared provider token is not a connection.
 
 ## Scripts
 
@@ -32,11 +31,11 @@ Register the OAuth app callback as `{API_PUBLIC_URL}/api/oauth/github/callback`.
 | `pnpm typecheck` | `tsc --noEmit` in each package |
 | `pnpm lint` | ESLint in each package |
 | `pnpm build` | API bundle via tsup, then `next build` |
-| `pnpm --filter @agentvault/api db:migrate` | Apply Drizzle migrations, including the connector catalog seed |
+| `pnpm --filter @agentvault/api db:migrate` | Apply Drizzle migrations. Startup also inserts any missing demo, GitHub, and Supabase catalog rows |
 
 ## GitHub authorization
 
-AgentVault uses a GitHub OAuth App with authorization code and PKCE. The resulting user access token is encrypted at rest. `user_connections.encrypted_credential_reference` stores the secret row id, not the token. After the token exchange, AgentVault calls GitHub's remote MCP server at `https://api.githubcopilot.com/mcp/`. The connection is marked connected only when that server accepts the credential and returns tools.
+The public demo rejects GitHub before this flow starts. The adapter is still in the repo. It uses a GitHub OAuth App with authorization code and PKCE. The resulting user access token is encrypted at rest. `user_connections.encrypted_credential_reference` stores the secret row id, not the token. After the token exchange, AgentVault calls GitHub's remote MCP server at `https://api.githubcopilot.com/mcp/`. The connection is marked connected only when that server accepts the credential and returns tools. The callback, if this provider is enabled later, is `{API_PUBLIC_URL}/api/oauth/github/callback`.
 
 The exposed tools are an allowlist matched to the current GitHub MCP catalog (`get_file_contents`, `list_commits`, `list_issues`, `issue_read`, `search_repositories`, `issue_write`). Other discovered tools are stored and kept disabled. `search_repositories` is denied once repository restrictions are saved, because a search query can reach other repositories.
 
@@ -53,7 +52,7 @@ Supabase stays disconnected. A project-scoped OAuth client is not configured, an
 Do not change production until these are set. Do not print secret values.
 
 - Vercel root directory `apps/web`. `NEXT_PUBLIC_API_URL` is the Railway API origin, for example `https://api-production-0c2b.up.railway.app`.
-- Railway root is this package (`railway.toml`). `WEB_ORIGIN` is the Vercel origin, for example `https://web-navy-pi-61.vercel.app`. `API_PUBLIC_URL` is the Railway origin. Keep `DATABASE_URL`, `JWT_SECRET`, and `CREDENTIAL_ENCRYPTION_KEY`. The demo provider uses dynamic registration and does not need a client secret.
+- Railway root is this package (`railway.toml`). The service is not connected to GitHub. Deploy it with `railway up` from this directory. A dashboard redeploy rebuilds the last CLI upload, not a later git commit. `WEB_ORIGIN` is the Vercel origin, for example `https://web-navy-pi-61.vercel.app`. `API_PUBLIC_URL` is the Railway origin. Keep `DATABASE_URL`, `JWT_SECRET`, and `CREDENTIAL_ENCRYPTION_KEY`. The demo provider uses dynamic registration and does not need a client secret. CORS allows `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE` from `WEB_ORIGIN`.
 - The demo callback is `{API_PUBLIC_URL}/api/oauth/demo/callback`.
 - Apply existing migrations only after confirming the production schema. Then provision accounts with `CONFIRM_PRODUCTION_SEED=agentvault-demo DATABASE_URL=... DEMO_CREDENTIALS_FILE=/absolute/path/outside/the/repo.txt pnpm seed:demo:production`. The command prints the database host and name, not the connection string or passwords. Passwords are written once to that file, mode 0600.
 - Health check: `GET /health`. Downstream MCP: `POST /mcp`.

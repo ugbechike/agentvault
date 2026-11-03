@@ -1,10 +1,10 @@
 # Permissions
 
 ```text
-effective access = provider-granted access ∩ AgentVault agent policy
+effective access = provider-granted access ∩ AgentVault agent policy ∩ per-tool policy ∩ resource scope
 ```
 
-Both sides are required. A tool the provider allows is still denied when the agent policy does not include that capability. An agent policy cannot widen a missing provider grant.
+A tool the provider allows is still denied when the agent policy does not include that capability. An agent policy cannot widen a missing provider grant. A saved tool policy can turn one allowlisted tool off. Resource grants can deny a repository, project, or unbounded tool.
 
 ## Types
 
@@ -14,37 +14,35 @@ Both sides are required. A tool the provider allows is still denied when the age
 - `EffectiveAccessInput` — server-loaded `providerGranted`, `agentAllowed`, `toolAllowlisted`, `connectionActive`, `agentActive`.
 - `PermissionDecision` — `outcome` of `allow` or `deny` plus a `reasonCode`.
 
-Reason codes already named: `ALLOWED`, `PROVIDER_SCOPE_MISSING`, `AGENT_POLICY_DENY`, `TOOL_NOT_ALLOWLISTED`, `CONNECTION_INACTIVE`, `AGENT_REVOKED`, `EVALUATION_NOT_IMPLEMENTED`.
+Reason codes: `ALLOWED`, `PROVIDER_SCOPE_MISSING`, `AGENT_POLICY_DENY`, `TOOL_NOT_ALLOWLISTED`, `CONNECTION_INACTIVE`, `AGENT_REVOKED`, `TOOL_POLICY_DENY`, `UNKNOWN_OPERATION`, `RESOURCE_DENIED`, `RESOURCE_UNSCOPED`. `EVALUATION_NOT_IMPLEMENTED` remains in the union and is not returned.
 
-Capabilities today: `github.read`, `github.write`, `supabase.read`, `supabase.write`. Illustrative tools in `constants/tools.ts` point at the capability they will require.
+Capabilities: `demo.read`, `github.read`, `github.write`, `supabase.read`, `supabase.write`. The public demo only grants and checks `demo.read`.
 
 ## Fail closed
 
-`evaluateEffectiveAccess` and `intersectAccess` in `apps/api/src/modules/permissions/policies/effective-access.ts` throw `NotImplementedError`. They do not return `allow`. The HTTP route returns 501 for a valid body and 400 for an invalid one.
-
-When you implement `intersectAccess`, deny unless every one of these is true:
+`evaluateEffectiveAccess` and `intersectAccess` in `apps/api/src/modules/permissions/policies/effective-access.ts` load the agent, connection, capability grants, tool policies, and resource grants from Postgres. `intersectAccess` denies unless every one of these is true:
 
 1. The connection is active.
 2. The agent is active.
-3. The AgentVault tool name is on the explicit allowlist for that connection.
+3. The AgentVault tool name is on the allowlist and discovery enabled that upstream tool for the connection.
 4. `requiredCapability` is in `providerGranted`.
 5. `requiredCapability` is in `agentAllowed`.
 
-Load grants from `user_connections` and `agent_permissions`. Do not accept them from the MCP client.
+`evaluateEffectiveAccess` then denies when the tool policy is off, or when `evaluateResourceScope` rejects the arguments. Grants are loaded from `user_connections`, `agent_permissions`, `agent_tool_policies`, and `agent_resource_grants`. They are not accepted from the MCP client.
 
-Call `evaluateEffectiveAccess` inside `handleToolsCall` for every invocation. `filterToolsForAgent` may hide tools from `tools/list`. Hiding them is not the check.
+`handleToolsCall` calls `evaluateEffectiveAccess` for every invocation. `filterToolsForAgent` may hide tools from `tools/list`. Hiding them is not the check.
 
-## Browser preview
+`PUT /api/agents/:id/access` saves the demo capability grant and the per-tool policies. It rejects a non-demo connection.
 
-`apps/web/src/modules/permissions/preview.ts` computes the same intersection for labels on the permissions and agent screens. `demoReducer` refuses to store an agent allow when the simulated provider grant is off, and clearing a provider grant clears matching agent allows.
-
-That reducer is not enforcement. The activity table is seeded sample data, including a row whose decision says allow and whose status is failure, so a fixture allow is not a successful call.
-
-## Routes still unimplemented
+## Routes
 
 - `GET /api/permissions`
 - `PUT /api/permissions`
+- `PUT /api/agents/:id/access`
+- `DELETE /api/permissions/:id`
 - `POST /api/permissions/evaluate`
 - `GET /api/audit`
 
-`recordAuditLog` throws so a 501 path cannot insert a row that claims a tool ran.
+`recordAuditLog` inserts a row for each tool call, including denials. The activity screen reads those rows.
+
+`apps/web/src/modules/permissions/preview.ts` is a fixture helper for the unused demo workspace. The permissions and agent screens call the API.
