@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import {
-  connectLabel,
-  disconnectLabel,
-  notConnectedStatus,
-  testConnectionStatus,
-} from "@/components/connectors/labels";
+import { attentionStatus, connectLabel, connectedStatus, disconnectLabel, notConnectedStatus } from "@/components/connectors/labels";
 import { ToolList } from "@/components/connectors/tool-list";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -27,16 +22,37 @@ import { capabilityCatalog, connectorCatalog, type ProviderId } from "@agentvaul
 
 const accessLevel = (capabilityId: string): string => (capabilityId.endsWith(".write") ? "Write" : "Read");
 
-export const ConnectorDetail = ({ provider }: { provider: string }) => {
+const statusLabel = (status: string | undefined): string => {
+  if (status === "connected") return connectedStatus;
+  if (status === "error" || status === "pending") return attentionStatus;
+  return notConnectedStatus;
+};
+
+export const ConnectorDetail = ({ provider, oauth }: { provider: string; oauth?: string }) => {
   const entry = connectorCatalog.find((item) => item.provider === provider);
   const { connections, error, reload } = useProviderConnections();
+  const typedProvider = provider as ProviderId;
+  const connection = connections.find((item) => item.provider === typedProvider);
   const [tools, setTools] = useState<DiscoveredConnectionTool[]>([]);
   const [actionError, setActionError] = useState<string>();
   const [pending, setPending] = useState(false);
 
-  if (!entry) {
-    return <Alert tone="bad">Unknown connector.</Alert>;
-  }
+  useEffect(() => {
+    if (!connection?.id) return;
+    let cancelled = false;
+    void loadConnectionTools(connection.id)
+      .then((next) => {
+        if (!cancelled) setTools(next);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setActionError(cause instanceof Error ? cause.message : "Tools could not be loaded.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [connection?.id]);
+
+  if (!entry) return <Alert tone="bad">Unknown connector.</Alert>;
 
   if (entry.status !== "available") {
     return (
@@ -47,22 +63,11 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
     );
   }
 
-  const typedProvider = provider as ProviderId;
-  const connection = connections.find((item) => item.provider === typedProvider && item.status === "connected");
-  const connected = Boolean(connection);
+  const connected = connection?.status === "connected";
   const capabilities = capabilityCatalog.filter((item) => item.provider === typedProvider);
-
-  useEffect(() => {
-    if (!connection) {
-      setTools([]);
-      return;
-    }
-    void loadConnectionTools(connection.id)
-      .then(setTools)
-      .catch((cause: unknown) => {
-        setActionError(cause instanceof Error ? cause.message : "Tools could not be loaded.");
-      });
-  }, [connection]);
+  const visibleTools = connection ? tools : [];
+  const exposed = visibleTools.filter((tool) => tool.enabled);
+  const hidden = visibleTools.filter((tool) => !tool.enabled);
 
   return (
     <div className="space-y-6">
@@ -78,25 +83,23 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
           )
         }
       />
+      {oauth === "connected" ? <Alert tone="good">GitHub authorization finished. Capabilities below come from the remote MCP server.</Alert> : null}
+      {oauth === "error" ? <Alert tone="bad">GitHub authorization did not finish. The connection is not marked successful.</Alert> : null}
       {error ? <Alert tone="bad">{error}</Alert> : null}
       {actionError ? <Alert tone="bad">{actionError}</Alert> : null}
+      {connection?.statusDetail ? <Alert tone={connected ? "neutral" : "warn"}>{connection.statusDetail}</Alert> : null}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="font-serif text-2xl">Connection</h2>
-            <Badge tone={connected ? "copper" : "neutral"}>{connected ? testConnectionStatus : notConnectedStatus}</Badge>
+            <Badge tone={connected ? "good" : connection ? "warn" : "neutral"}>{statusLabel(connection?.status)}</Badge>
           </div>
           <p className="text-sm leading-6 text-ink-soft">
             {connected
-              ? `Agents can use a ${entry.name} credential already configured for this workspace. Allow access on each agent before they can use it.`
-              : `Connect ${entry.name} with the credential already configured for this workspace, then choose which agents can use it.`}
+              ? `Signed in to ${entry.name} as ${connection?.providerAccountId ?? "your account"}. Choose which agents can use it.`
+              : `Connect ${entry.name} with your own account, then choose which agents can use it.`}
           </p>
-          {typedProvider === "supabase" ? (
-            <p className="text-sm text-ink-soft">Project: {connection?.providerAccountId ?? "Add a project when you connect"}</p>
-          ) : null}
-          <p className="text-sm text-ink-soft">
-            Updated: {connection?.updatedAt ? formatTimestamp(connection.updatedAt) : "Never"}
-          </p>
+          <p className="text-sm text-ink-soft">Updated: {connection?.updatedAt ? formatTimestamp(connection.updatedAt) : "Never"}</p>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
@@ -108,6 +111,7 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
                 void discoverProviderTools(connection.id)
                   .then(() => loadConnectionTools(connection.id))
                   .then(setTools)
+                  .then(() => reload())
                   .catch((cause: unknown) => {
                     setActionError(cause instanceof Error ? cause.message : "Available actions could not be refreshed.");
                   })
@@ -152,23 +156,20 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
         </Card>
       </div>
       <Card>
-        <h2 className="font-serif text-2xl">Available actions</h2>
-        <p className="mt-2 mb-4 text-sm text-ink-soft">
-          These are the actions agents can take with this connection after you allow access.
-        </p>
+        <h2 className="font-serif text-2xl">Available capabilities</h2>
+        <p className="mt-2 mb-4 text-sm text-ink-soft">These are the allowlisted actions discovered from the provider. Other discovered tools stay hidden.</p>
         <ToolList
-          tools={tools.map((tool) => ({
+          tools={exposed.map((tool) => ({
             id: tool.id,
             name: tool.upstreamToolName,
             description: tool.description,
             requiredCapability: tool.requiredCapability,
           }))}
-          empty={
-            connected
-              ? "No actions yet. Refresh to see what agents can do with this connection."
-              : `Connect ${entry.name} to see what agents can do with it.`
-          }
+          empty={connected ? "No allowlisted actions were in the latest discovery." : `Connect ${entry.name} to discover actions.`}
         />
+        {hidden.length > 0 ? (
+          <p className="mt-4 text-sm text-ink-soft">{hidden.length} discovered tools are not exposed.</p>
+        ) : null}
       </Card>
     </div>
   );

@@ -7,10 +7,9 @@ import { useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput } from "@/components/ui/field";
-import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
+import { loginAccount } from "@/modules/auth/dashboard-auth";
 
 export const SignInForm = () => {
-  const { signIn } = useDemoWorkspace();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string>();
@@ -24,7 +23,7 @@ export const SignInForm = () => {
         const data = new FormData(event.currentTarget);
         setPending(true);
         setFormError(undefined);
-        void signIn({ email: data.get("email"), password: data.get("password") }).then((result) => {
+        void loginAccount({ email: data.get("email"), password: data.get("password") }).then((result) => {
           setPending(false);
           if (!result.ok) {
             setFormError(result.formError);

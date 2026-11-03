@@ -1,4 +1,3 @@
-import { DemoProvider } from "@/modules/demo/demo-provider";
 import "@/styles/globals.css";
 
 import type { Metadata } from "next";
@@ -19,7 +18,7 @@ export const metadata: Metadata = {
 const RootLayout = ({ children }: { children: ReactNode }) => (
   <html lang="en">
     <body className={`${geist.variable} ${fraunces.variable} antialiased`}>
-      <DemoProvider>{children}</DemoProvider>
+      {children}
     </body>
   </html>
 );

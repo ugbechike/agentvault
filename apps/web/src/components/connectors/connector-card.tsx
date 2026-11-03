@@ -1,10 +1,10 @@
 import Link from "next/link";
 
 import {
+  connectedStatus,
   connectLabel,
   manageConnectionLabel,
   notConnectedStatus,
-  testConnectionStatus,
 } from "@/components/connectors/labels";
 import { ProviderMark } from "@/components/connectors/provider-mark";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,7 @@ export const ConnectorCard = ({
       <div className="flex items-start justify-between gap-3">
         <ProviderMark provider={entry.provider} />
         {available ? (
-          <Badge tone={connected ? "copper" : "neutral"}>{connected ? testConnectionStatus : notConnectedStatus}</Badge>
+          <Badge tone={connected ? "copper" : "neutral"}>{connected ? connectedStatus : notConnectedStatus}</Badge>
         ) : (
           <Badge tone="warn">Coming soon</Badge>
         )}

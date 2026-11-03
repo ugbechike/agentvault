@@ -41,10 +41,15 @@ export const DemoProvider = ({ children }: { children: ReactNode }) => {
       dispatch: (action) => updateDemo((current) => demoReducer(current, action)),
       signIn: async (input) => {
         const result = await loginAccount(input);
-        if (result.ok) {
-          updateDemo((current) => demoReducer(current, { type: "sign-in", session: result.session }));
-        }
-        return result;
+        if (!result.ok) return result;
+        const session = {
+          userId: result.session.userId,
+          name: result.session.name,
+          email: result.session.email,
+          mock: true as const,
+        };
+        updateDemo((current) => demoReducer(current, { type: "sign-in", session }));
+        return { ok: true, message: result.message, session };
       },
       signUp: async (input) => registerAccount(input),
       forgotPassword: async (input) => {

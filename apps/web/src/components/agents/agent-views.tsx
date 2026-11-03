@@ -2,17 +2,27 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { AgentAccess } from "@/components/agents/agent-access";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
-import { AgentAccess } from "@/components/agents/agent-access";
-import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
 import { formatTimestamp } from "@/lib/format";
+import {
+  createAgent,
+  forgetIssuedCredential,
+  getAgent,
+  listAgents,
+  readIssuedCredential,
+  rememberIssuedCredential,
+  revokeAgent,
+  rotateAgentCredential,
+  type AgentSummary,
+} from "@/modules/agents/agent-api";
 import { createAgentSchema, type AgentClientKind } from "@agentvault/shared";
 
 const clientLabel: Record<AgentClientKind, string> = {
@@ -22,27 +32,35 @@ const clientLabel: Record<AgentClientKind, string> = {
 };
 
 export const AgentListView = () => {
-  const { state } = useDemoWorkspace();
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    void listAgents()
+      .then(setAgents)
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Agents could not be loaded."));
+  }, []);
 
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Workspace"
         title="Agents"
-        description="An agent is an AI assistant that can use the connections you allow. New agents start with no access."
+        description="An agent is one external MCP client. Each registration gets its own credential. New agents start with no access."
         actions={
           <Link href="/agents/new">
             <Button>Register agent</Button>
           </Link>
         }
       />
-      {state.agents.length === 0 ? (
+      {error ? <Alert tone="bad">{error}</Alert> : null}
+      {agents.length === 0 ? (
         <Card>
           <p className="text-sm text-ink-soft">No agents yet. Add one, then choose which connections it can use.</p>
         </Card>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
-        {state.agents.map((agent) => (
+        {agents.map((agent) => (
           <Card key={agent.id}>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -52,7 +70,10 @@ export const AgentListView = () => {
               <Badge tone={agent.status === "active" ? "good" : "bad"}>{agent.status}</Badge>
             </div>
             <p className="mt-3 text-sm leading-6 text-ink-soft">{agent.description}</p>
-            <p className="mt-3 text-xs text-ink-soft">Added {formatTimestamp(agent.createdAt)}</p>
+            <p className="mt-3 text-xs text-ink-soft">
+              Added {formatTimestamp(agent.createdAt)}
+              {agent.credentials[0] ? ` · Credential ${agent.credentials[0].tokenPrefix}…` : ""}
+            </p>
             <Link href={`/agents/${agent.id}`} className="mt-4 inline-block text-sm text-copper-deep underline">
               Configure access
             </Link>
@@ -64,16 +85,16 @@ export const AgentListView = () => {
 };
 
 export const RegisterAgentForm = () => {
-  const { dispatch } = useDemoWorkspace();
   const router = useRouter();
   const [error, setError] = useState<string>();
+  const [pending, setPending] = useState(false);
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Agents"
         title="Register an agent"
-        description="New agents start with no access. After you save, choose which connections this agent can use."
+        description="Name the client, such as My Cursor. AgentVault issues a credential once. New agents start with no access."
       />
       <Card>
         <form
@@ -90,24 +111,21 @@ export const RegisterAgentForm = () => {
               setError(parsed.error.issues[0]?.message ?? "Check the form.");
               return;
             }
-            const id = `agt_${crypto.randomUUID()}`;
-            dispatch({
-              type: "register-agent",
-              agent: {
-                id,
-                name: parsed.data.name,
-                description: parsed.data.description,
-                clientKind: parsed.data.clientKind,
-                status: "active",
-                createdAt: new Date().toISOString(),
-              },
-            });
-            router.push(`/agents/${id}`);
+            setPending(true);
+            void createAgent(parsed.data)
+              .then((created) => {
+                rememberIssuedCredential(created.agent.id, created.credential.token);
+                router.push(`/agents/${created.agent.id}`);
+              })
+              .catch((cause: unknown) => {
+                setError(cause instanceof Error ? cause.message : "The agent could not be registered.");
+                setPending(false);
+              });
           }}
         >
           {error ? <Alert tone="bad">{error}</Alert> : null}
           <Field label="Name" htmlFor="agent-name">
-            <TextInput id="agent-name" name="name" />
+            <TextInput id="agent-name" name="name" placeholder="My Cursor" />
           </Field>
           <Field label="Description" htmlFor="agent-description">
             <TextArea id="agent-description" name="description" />
@@ -119,7 +137,9 @@ export const RegisterAgentForm = () => {
               <option value="custom">Custom agent</option>
             </SelectInput>
           </Field>
-          <Button type="submit">Save agent</Button>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : "Save agent"}
+          </Button>
         </form>
       </Card>
     </div>
@@ -127,27 +147,79 @@ export const RegisterAgentForm = () => {
 };
 
 export const AgentDetailView = ({ agentId }: { agentId: string }) => {
-  const { state, dispatch } = useDemoWorkspace();
-  const agent = state.agents.find((item) => item.id === agentId);
+  const [agent, setAgent] = useState<AgentSummary>();
+  const [error, setError] = useState<string>();
+  const [issued, setIssued] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
 
-  if (!agent) {
-    return <Alert tone="bad">That agent could not be found.</Alert>;
-  }
+  useEffect(() => {
+    const token = readIssuedCredential(agentId);
+    let cancelled = false;
+    void getAgent(agentId)
+      .then((next) => {
+        if (cancelled) return;
+        setAgent(next);
+        setIssued(token);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "That agent could not be loaded.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId]);
+
+  if (error) return <Alert tone="bad">{error}</Alert>;
+  if (!agent) return <p className="text-sm text-ink-soft">Loading agent…</p>;
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow={clientLabel[agent.clientKind]}
-        title={agent.name}
-        description={agent.description || "No description."}
-      />
-      {agent.status === "revoked" ? <Alert tone="bad">This agent's access has been revoked.</Alert> : null}
+      <PageHeader eyebrow={clientLabel[agent.clientKind]} title={agent.name} description={agent.description || "No description."} />
+      {issued ? (
+        <Alert tone="warn">
+          <span className="block">Copy this MCP credential now. It is not shown again.</span>
+          <code className="mt-2 block break-all font-mono text-xs">{issued}</code>
+          <Button
+            className="mt-3"
+            variant="secondary"
+            onClick={() => {
+              forgetIssuedCredential(agent.id);
+              setIssued(null);
+            }}
+          >
+            I have copied it
+          </Button>
+        </Alert>
+      ) : (
+        <Card className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-ink-soft">
+              Active credential prefix: {agent.credentials?.[0]?.tokenPrefix ?? "none"}…
+          </p>
+          <Button
+            variant="secondary"
+            disabled={agent.status !== "active"}
+            onClick={() => {
+              void rotateAgentCredential(agent.id).then((credential) => {
+                rememberIssuedCredential(agent.id, credential.token);
+                setIssued(credential.token);
+              });
+            }}
+          >
+            Rotate credential
+          </Button>
+        </Card>
+      )}
+      {agent.status === "revoked" ? <Alert tone="bad">This agent&apos;s access has been revoked.</Alert> : null}
       <AgentAccess agent={agent} />
       <Card className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-soft">Revoke removes this agent's access to your connections.</p>
+        <p className="text-sm text-ink-soft">Revoke removes this credential and its permissions immediately.</p>
         {confirming ? (
-          <Button variant="danger" onClick={() => dispatch({ type: "revoke-agent", agentId: agent.id })}>
+          <Button
+            variant="danger"
+            onClick={() => {
+              void revokeAgent(agent.id).then((revoked) => setAgent({ ...agent, ...revoked, credentials: [] }));
+            }}
+          >
             Confirm revoke
           </Button>
         ) : (

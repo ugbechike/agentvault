@@ -1,300 +1,203 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { notConnectedStatus, testConnectionStatus } from "@/components/connectors/labels";
+import { connectedStatus, notConnectedStatus } from "@/components/connectors/labels";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
 import { useProviderConnections } from "@/hooks/use-provider-connections";
-import { previewEffective } from "@/modules/permissions/preview";
-import type { DemoAgent } from "@/modules/demo/types";
-import {
-  capabilityCatalog,
-  connectableProviders,
-  illustrativeAllowlist,
-  type CapabilityId,
-  type ProviderId,
-} from "@agentvault/shared";
+import { apiRequest } from "@/modules/api/client";
+import type { AgentSummary } from "@/modules/agents/agent-api";
+import { connectableProviders, illustrativeAllowlist, type ProviderId } from "@agentvault/shared";
 
 type Preset = "none" | "read" | "write";
+type ResourceAccess = "read" | "write" | "deny";
 
-const providerLabel: Record<ProviderId, string> = {
-  github: "GitHub",
-  supabase: "Supabase",
-};
+interface ResourceDraft {
+  resourceKey: string;
+  access: ResourceAccess;
+}
 
-const resourceNoun: Record<ProviderId, string> = {
-  github: "repository",
-  supabase: "project",
-};
+const providerLabel: Record<ProviderId, string> = { github: "GitHub", supabase: "Supabase" };
+const presetLabel: Record<Preset, string> = { none: "No access", read: "Read only", write: "Read and write" };
 
-const readCapability = (provider: ProviderId): CapabilityId =>
-  provider === "github" ? "github.read" : "supabase.read";
+interface PermissionResponse {
+  permissions: { agentId: string; connectionId: string; capability: string; allowed: boolean }[];
+  resources: { agentId: string; connectionId: string; resourceKey: string; access: ResourceAccess }[];
+}
 
-const writeCapability = (provider: ProviderId): CapabilityId =>
-  provider === "github" ? "github.write" : "supabase.write";
-
-const presetFor = (
-  permissions: { agentId: string; capability: CapabilityId; allowed: boolean }[],
-  agentId: string,
-  provider: ProviderId,
-): Preset => {
-  const write = permissions.some(
-    (item) => item.agentId === agentId && item.capability === writeCapability(provider) && item.allowed,
-  );
-  const read = permissions.some(
-    (item) => item.agentId === agentId && item.capability === readCapability(provider) && item.allowed,
-  );
-  if (write) return "write";
-  if (read) return "read";
-  return "none";
-};
-
-const presetLabel: Record<Preset, string> = {
-  none: "No access",
-  read: "Read only",
-  write: "Read and write",
-};
-
-export const AgentAccess = ({ agent }: { agent: DemoAgent }) => {
-  const { state, dispatch } = useDemoWorkspace();
+export const AgentAccess = ({ agent }: { agent: AgentSummary }) => {
   const { connections, error } = useProviderConnections();
   const [provider, setProvider] = useState<ProviderId>("github");
-  const [resourceDraft, setResourceDraft] = useState("");
-  const [advanced, setAdvanced] = useState(false);
-  const active = agent.status === "active";
-  const connected = connections.some((item) => item.provider === provider && item.status === "connected");
-  const connection = connections.find((item) => item.provider === provider);
-  const preset = presetFor(state.permissions, agent.id, provider);
+  const [presetOverride, setPresetOverride] = useState<Preset | null>(null);
+  const [resourceOverride, setResourceOverride] = useState<ResourceDraft[] | null>(null);
+  const [draft, setDraft] = useState("");
+  const [resourceAccess, setResourceAccess] = useState<ResourceAccess>("read");
+  const [message, setMessage] = useState<string>();
+  const [saveError, setSaveError] = useState<string>();
+  const [pending, setPending] = useState(false);
+  const [grants, setGrants] = useState<PermissionResponse>({ permissions: [], resources: [] });
+
+  const connection = connections.find((item) => item.provider === provider && item.status === "connected");
+
+  useEffect(() => {
+    let cancelled = false;
+    void apiRequest<PermissionResponse>("/api/permissions")
+      .then((next) => {
+        if (!cancelled) setGrants(next);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setSaveError(cause instanceof Error ? cause.message : "Permissions could not be loaded.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [agent.id]);
+
+  const savedPreset = useMemo<Preset>(() => {
+    if (!connection) return "none";
+    const mine = grants.permissions.filter((item) => item.agentId === agent.id && item.connectionId === connection.id && item.allowed);
+    if (mine.some((item) => item.capability.endsWith(".write"))) return "write";
+    if (mine.some((item) => item.capability.endsWith(".read"))) return "read";
+    return "none";
+  }, [agent.id, connection, grants.permissions]);
+
+  const savedResources = useMemo<ResourceDraft[]>(
+    () =>
+      connection
+        ? grants.resources
+            .filter((item) => item.agentId === agent.id && item.connectionId === connection.id)
+            .map((item) => ({ resourceKey: item.resourceKey, access: item.access }))
+        : [],
+    [agent.id, connection, grants.resources],
+  );
+  const preset = presetOverride ?? savedPreset;
+  const resources = resourceOverride ?? savedResources;
+
+  const save = () => {
+    if (!connection) return;
+    setPending(true);
+    setSaveError(undefined);
+    setMessage(undefined);
+    void apiRequest(`/api/agents/${agent.id}/access`, {
+      method: "PUT",
+      body: JSON.stringify({
+        connectionId: connection.id,
+        read: preset !== "none",
+        write: preset === "write",
+        resources,
+      }),
+    })
+      .then(() => apiRequest<PermissionResponse>("/api/permissions"))
+      .then((next) => {
+        setGrants(next);
+        setPresetOverride(null);
+        setResourceOverride(null);
+        setMessage("Access saved. It applies to the next tool call.");
+      })
+      .catch((cause: unknown) => setSaveError(cause instanceof Error ? cause.message : "Access could not be saved."))
+      .finally(() => setPending(false));
+  };
+
   const tools = illustrativeAllowlist.filter((tool) => tool.provider === provider);
-  const resources = state.resources.find((item) => item.agentId === agent.id && item.provider === provider)?.resources ?? [];
-
-  const applyPreset = (next: Preset) => {
-    dispatch({
-      type: "set-agent-capability",
-      agentId: agent.id,
-      capability: readCapability(provider),
-      allowed: next !== "none",
-    });
-    dispatch({
-      type: "set-agent-capability",
-      agentId: agent.id,
-      capability: writeCapability(provider),
-      allowed: next === "write",
-    });
-    dispatch({
-      type: "clear-tool-policies",
-      agentId: agent.id,
-      toolNames: tools.map((tool) => tool.agentvaultName),
-    });
-  };
-
-  const addResource = () => {
-    const value = resourceDraft.trim();
-    if (!value || resources.includes(value)) {
-      setResourceDraft("");
-      return;
-    }
-    dispatch({
-      type: "set-agent-resources",
-      agentId: agent.id,
-      provider,
-      resources: [...resources, value],
-    });
-    setResourceDraft("");
-  };
 
   return (
     <div className="space-y-4">
       <Card className="space-y-2">
         <p className="text-sm font-medium">Agent access</p>
         <p className="text-sm leading-6 text-ink-soft">
-          Choose what {agent.name} can do with each connection. A test connection is shared by the workspace, and this
-          agent can use it only after you allow access here. These choices are a preview in this workspace.
+          Choose what {agent.name} can do. Empty repository list means every repository the GitHub account can reach.
+          Adding repositories limits the agent to those names.
         </p>
         {error ? <p className="text-sm text-clay">{error}</p> : null}
       </Card>
       <div className="grid gap-4 lg:grid-cols-[16rem_1fr]">
         <div className="space-y-2">
           {connectableProviders.map((item) => {
-            const itemConnected = connections.some(
-              (connectionItem) => connectionItem.provider === item && connectionItem.status === "connected",
-            );
-            const itemPreset = presetFor(state.permissions, agent.id, item);
+            const itemConnected = connections.some((connectionItem) => connectionItem.provider === item && connectionItem.status === "connected");
             return (
               <button
                 key={item}
                 type="button"
                 onClick={() => {
                   setProvider(item);
-                  setAdvanced(false);
+                  setPresetOverride(null);
+                  setResourceOverride(null);
                 }}
-                className={`w-full rounded-2xl border px-3 py-3 text-left ${
-                  provider === item ? "border-ink bg-paper-2" : "border-line bg-paper"
-                }`}
+                className={`w-full rounded-2xl border px-3 py-3 text-left ${provider === item ? "border-ink bg-paper-2" : "border-line bg-paper"}`}
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{providerLabel[item]}</span>
-                  <Badge tone={itemConnected ? "copper" : "neutral"}>
-                    {itemConnected ? testConnectionStatus : notConnectedStatus}
-                  </Badge>
+                  <Badge tone={itemConnected ? "good" : "neutral"}>{itemConnected ? connectedStatus : notConnectedStatus}</Badge>
                 </span>
-                <span className="mt-1 block text-xs text-ink-soft">{presetLabel[itemPreset]}</span>
               </button>
             );
           })}
         </div>
         <Card className="space-y-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="font-serif text-2xl">{providerLabel[provider]}</h2>
-              <p className="mt-1 text-sm text-ink-soft">
-                {connected
-                  ? `Test connection${connection?.providerAccountId ? ` · ${connection.providerAccountId}` : ""}. This uses a ${providerLabel[provider]} credential configured for the workspace. Choose what ${agent.name} can do with it.`
-                  : `Connect ${providerLabel[provider]} before ${agent.name} can use it.`}
-              </p>
-            </div>
+          {!connection ? <Alert tone="warn">Connect {providerLabel[provider]} before granting access.</Alert> : null}
+          <div className="flex flex-wrap gap-2">
+            {(["none", "read", "write"] as const).map((item) => (
+              <Button key={item} variant={preset === item ? "primary" : "secondary"} disabled={!connection || agent.status !== "active"} onClick={() => setPresetOverride(item)}>
+                {presetLabel[item]}
+              </Button>
+            ))}
           </div>
-          <div>
-            <p className="text-xs font-medium tracking-wide text-ink-soft uppercase">Access preset</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {(
-                [
-                  ["none", "No access"],
-                  ["read", "Read only"],
-                  ["write", "Read and write"],
-                ] as const
-              ).map(([value, label]) => (
-                <Button
-                  key={value}
-                  variant={preset === value ? "primary" : "secondary"}
-                  disabled={!active}
-                  onClick={() => applyPreset(value)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-medium tracking-wide text-ink-soft uppercase">
-                {resourceNoun[provider]} limits
-              </p>
-              <p className="text-xs text-ink-soft">
-                {provider === "github"
-                  ? "Optional. Add repositories to limit this agent."
-                  : "Optional. Add a project reference to limit this agent."}
-              </p>
-            </div>
-            <form
-              className="mt-2 flex gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                addResource();
-              }}
-            >
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{provider === "github" ? "Repositories" : "Project"}</p>
+            <div className="flex flex-wrap gap-2">
               <input
-                value={resourceDraft}
-                onChange={(event) => setResourceDraft(event.target.value)}
-                placeholder={provider === "github" ? "owner/repository" : "project reference"}
-                className="h-10 min-w-0 flex-1 rounded-full border border-line bg-paper-2 px-4 text-sm"
-                disabled={!active}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                placeholder={provider === "github" ? "owner/repository" : "project ref"}
+                className="h-10 min-w-0 flex-1 rounded-full border border-line bg-paper px-4 text-sm"
               />
-              <Button type="submit" variant="secondary" disabled={!active}>
+              <select value={resourceAccess} onChange={(event) => setResourceAccess(event.target.value as ResourceAccess)} className="h-10 rounded-full border border-line bg-paper px-3 text-sm">
+                <option value="read">Read</option>
+                <option value="write">Read and write</option>
+                <option value="deny">Denied</option>
+              </select>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const resourceKey = draft.trim().toLowerCase();
+                  if (!resourceKey || resources.some((item) => item.resourceKey === resourceKey)) return;
+                  setResourceOverride([...resources, { resourceKey, access: resourceAccess }]);
+                  setDraft("");
+                }}
+              >
                 Add
               </Button>
-            </form>
-            <ul className="mt-3 flex flex-wrap gap-2">
+            </div>
+            <ul className="space-y-2 text-sm">
               {resources.map((resource) => (
-                <li key={resource}>
-                  <button
-                    type="button"
-                    className="rounded-full border border-line px-3 py-1 text-xs"
-                    onClick={() =>
-                      dispatch({
-                        type: "set-agent-resources",
-                        agentId: agent.id,
-                        provider,
-                        resources: resources.filter((item) => item !== resource),
-                      })
-                    }
-                  >
-                    {resource} · remove
+                <li key={resource.resourceKey} className="flex items-center justify-between gap-3">
+                  <span className="font-mono">{resource.resourceKey}</span>
+                  <span className="text-ink-soft">{resource.access}</span>
+                  <button type="button" className="text-clay" onClick={() => setResourceOverride(resources.filter((item) => item.resourceKey !== resource.resourceKey))}>
+                    Remove
                   </button>
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <button type="button" className="text-sm text-copper-deep underline" onClick={() => setAdvanced((value) => !value)}>
-              {advanced ? "Hide tool permissions" : "Advanced tool permissions"}
-            </button>
-            {advanced ? (
-              <ul className="mt-3 divide-y divide-line">
-                {tools.map((tool) => {
-                  const override = state.toolPolicies.find(
-                    (item) => item.agentId === agent.id && item.toolName === tool.agentvaultName,
-                  );
-                  const capabilityAllowed = Boolean(
-                    state.permissions.find(
-                      (item) => item.agentId === agent.id && item.capability === tool.requiredCapability && item.allowed,
-                    ),
-                  );
-                  const checked = capabilityAllowed && (override?.allowed ?? true);
-                  return (
-                    <li key={tool.agentvaultName} className="flex items-center justify-between gap-3 py-3">
-                      <div>
-                        <p className="text-sm font-medium">{tool.description}</p>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={!active || !capabilityAllowed}
-                        aria-label={tool.description}
-                        onChange={() =>
-                          dispatch({
-                            type: "set-tool-policy",
-                            agentId: agent.id,
-                            toolName: tool.agentvaultName,
-                            allowed: !checked,
-                          })
-                        }
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : null}
-          </div>
-          <div>
-            <p className="text-xs font-medium tracking-wide text-ink-soft uppercase">What this agent can do</p>
-            <ul className="mt-2 space-y-2">
-              {capabilityCatalog
-                .filter((capability) => capability.provider === provider)
-                .map((capability) => {
-                  const preview = previewEffective(state, agent.id, capability.id, connected);
-                  const reason = !connected
-                    ? `Connect ${providerLabel[provider]} before you can allow this.`
-                    : !preview.agentAllowed
-                      ? `${agent.name} cannot use this yet.`
-                      : resources.length > 0
-                        ? `Allowed for ${agent.name}, limited to ${resources.join(", ")}.`
-                        : `Allowed for ${agent.name}.`;
-                  return (
-                    <li key={capability.id} className="rounded-2xl border border-line px-3 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-medium">{capability.label}</p>
-                        <Badge tone={preview.effective ? "good" : "neutral"}>{preview.effective ? "Allowed" : "No access"}</Badge>
-                      </div>
-                      <p className="mt-1 text-xs leading-5 text-ink-soft">{reason}</p>
-                    </li>
-                  );
-                })}
+            <p className="text-sm font-medium">Effective tools</p>
+            <ul className="mt-2 space-y-1 text-sm text-ink-soft">
+              {tools.map((tool) => (
+                <li key={tool.agentvaultName}>
+                  {tool.agentvaultName} · {preset === "none" || (tool.requiredCapability.endsWith(".write") && preset !== "write") ? "Denied" : "Allowed when the call matches these resources"}
+                </li>
+              ))}
             </ul>
           </div>
+          {saveError ? <Alert tone="bad">{saveError}</Alert> : null}
+          {message ? <Alert tone="good">{message}</Alert> : null}
+          <Button disabled={!connection || pending || agent.status !== "active"} onClick={save}>
+            {pending ? "Saving…" : "Save permissions"}
+          </Button>
         </Card>
       </div>
     </div>

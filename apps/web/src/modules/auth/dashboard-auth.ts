@@ -1,22 +1,21 @@
-import { loginSchema, type DashboardSession } from "@agentvault/shared";
+import { loginSchema, type DashboardSession, type UserProfile } from "@agentvault/shared";
 
-import { apiBaseUrl } from "@/lib/format";
-import type { DemoSession } from "@/modules/demo/types";
+import { apiRequest } from "@/modules/api/client";
+import { clearBrowserSession, readBrowserSession, writeBrowserSession, type BrowserSession } from "@/modules/session/browser-session";
 
 import { fieldErrorsFrom, signUpFormSchema, type FieldFailure } from "./mock-auth";
 
 export const accessTokenStorageKey = "agentvault-access-token";
 
 export const logoutAccount = async (): Promise<void> => {
-  const token = localStorage.getItem(accessTokenStorageKey);
+  const session = readBrowserSession();
   try {
-    if (!token) return;
-    await fetch(`${apiBaseUrl()}/api/auth/logout`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}` },
-    });
+    if (!session) return;
+    await apiRequest("/api/auth/logout", { method: "POST" });
+  } catch {
+    // The local session is cleared even when the API is unreachable.
   } finally {
-    localStorage.removeItem(accessTokenStorageKey);
+    clearBrowserSession();
   }
 };
 
@@ -43,6 +42,7 @@ const failureFromResponse = async (response: Response): Promise<FieldFailure> =>
 };
 
 const postJson = async (path: string, body: unknown): Promise<Response> => {
+  const { apiBaseUrl } = await import("@/lib/format");
   return fetch(`${apiBaseUrl()}${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -70,7 +70,7 @@ export const registerAccount = async (input: unknown): Promise<FieldFailure | { 
 
 export const loginAccount = async (
   input: unknown,
-): Promise<FieldFailure | { ok: true; message: string; session: DemoSession }> => {
+): Promise<FieldFailure | { ok: true; message: string; session: BrowserSession }> => {
   const parsed = loginSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, fieldErrors: fieldErrorsFrom(parsed.error) };
@@ -82,20 +82,28 @@ export const loginAccount = async (
     });
     if (!response.ok) return failureFromResponse(response);
     const body = (await response.json()) as DashboardSession;
-    localStorage.setItem(accessTokenStorageKey, body.accessToken);
     const email = parsed.data.email.toLowerCase();
-    const name = email.split("@")[0] || email;
-    return {
-      ok: true,
-      message: "Signed in.",
-      session: {
-        userId: body.userId,
-        name,
-        email,
-        mock: true,
-      },
+    writeBrowserSession({
+      userId: body.userId,
+      email,
+      name: email.split("@")[0] || email,
+      accessToken: body.accessToken,
+      refreshToken: body.refreshToken,
+      expiresAt: body.expiresAt,
+    });
+    const profile = await apiRequest<UserProfile>("/api/users/me");
+    const session: BrowserSession = {
+      userId: profile.id,
+      email: profile.email,
+      name: profile.name || email,
+      accessToken: body.accessToken,
+      refreshToken: body.refreshToken,
+      expiresAt: body.expiresAt,
     };
+    writeBrowserSession(session);
+    return { ok: true, message: "Signed in.", session };
   } catch {
+    clearBrowserSession();
     return { ok: false, fieldErrors: {}, formError: "The API could not be reached." };
   }
 };

@@ -1,13 +1,15 @@
 import type { ProviderId } from "@agentvault/shared";
 
-import { accessTokenStorageKey } from "@/modules/auth/dashboard-auth";
-import { apiBaseUrl } from "@/lib/format";
+import { apiRequest } from "@/modules/api/client";
 
 export interface ProviderConnection {
   id: string;
   provider: ProviderId;
   providerAccountId: string | null;
   status: string;
+  statusDetail: string | null;
+  grantedCapabilities: string[];
+  readOnly: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,66 +23,28 @@ export interface DiscoveredConnectionTool {
   enabled: boolean;
 }
 
-interface ApiFailure {
-  error?: { message?: string };
-}
-
-const authHeaders = (): HeadersInit => {
-  const token = localStorage.getItem(accessTokenStorageKey);
-  if (!token) {
-    throw new Error("Sign in before connecting a provider.");
-  }
-  return {
-    authorization: `Bearer ${token}`,
-    "content-type": "application/json",
-  };
-};
-
-const readError = async (response: Response): Promise<string> => {
-  const body = (await response.json().catch(() => null)) as ApiFailure | null;
-  return body?.error?.message ?? "The request failed.";
-};
-
-export const listProviderConnections = async (): Promise<ProviderConnection[]> => {
-  const response = await fetch(`${apiBaseUrl()}/api/connections`, { headers: authHeaders() });
-  if (!response.ok) throw new Error(await readError(response));
-  return (await response.json()) as ProviderConnection[];
-};
-
-export const createProviderConnection = async (input: {
-  provider: ProviderId;
-  projectRef?: string;
-}): Promise<ProviderConnection> => {
-  const response = await fetch(`${apiBaseUrl()}/api/connections`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(input),
-  });
-  if (!response.ok) throw new Error(await readError(response));
-  return (await response.json()) as ProviderConnection;
-};
+export const listProviderConnections = async (): Promise<ProviderConnection[]> =>
+  apiRequest<ProviderConnection[]>("/api/connections");
 
 export const disconnectProviderConnection = async (connectionId: string): Promise<void> => {
-  const response = await fetch(`${apiBaseUrl()}/api/connections/${connectionId}`, {
-    method: "DELETE",
-    headers: authHeaders(),
-  });
-  if (!response.ok) throw new Error(await readError(response));
+  await apiRequest(`/api/connections/${connectionId}`, { method: "DELETE" });
 };
 
 export const loadConnectionTools = async (connectionId: string): Promise<DiscoveredConnectionTool[]> => {
-  const response = await fetch(`${apiBaseUrl()}/api/connections/${connectionId}`, {
-    headers: authHeaders(),
-  });
-  if (!response.ok) throw new Error(await readError(response));
-  const body = (await response.json()) as { tools?: DiscoveredConnectionTool[] };
+  const body = await apiRequest<{ tools?: DiscoveredConnectionTool[] }>(`/api/connections/${connectionId}`);
   return body.tools ?? [];
 };
 
 export const discoverProviderTools = async (connectionId: string): Promise<void> => {
-  const response = await fetch(`${apiBaseUrl()}/api/connections/${connectionId}/validate`, {
-    method: "POST",
-    headers: authHeaders(),
-  });
-  if (!response.ok) throw new Error(await readError(response));
+  await apiRequest(`/api/connections/${connectionId}/validate`, { method: "POST" });
+};
+
+export const startGithubAuthorization = async (): Promise<string> => {
+  const body = await apiRequest<{ authorizationUrl: string }>("/api/oauth/github/start", { method: "POST" });
+  return body.authorizationUrl;
+};
+
+export const startSupabaseAuthorization = async (): Promise<void> => {
+  await apiRequest("/api/oauth/supabase/start", { method: "POST" });
+  throw new Error("Supabase stayed disconnected because authorization is not configured.");
 };

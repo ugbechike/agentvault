@@ -48,6 +48,7 @@ export const SidebarNav = ({ onNavigate }: { onNavigate?: () => void }) => {
               <Link
                 href={item.href}
                 onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex items-center gap-3 rounded-2xl px-3 py-2 text-sm",
                   active ? "bg-paper text-ink" : "text-paper/75 hover:bg-white/5 hover:text-paper",

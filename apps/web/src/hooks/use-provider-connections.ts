@@ -25,8 +25,25 @@ export const useProviderConnections = () => {
   }, []);
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    let cancelled = false;
+    void listProviderConnections()
+      .then((next) => {
+        if (cancelled) return;
+        setConnections(next);
+        setError(undefined);
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        setConnections([]);
+        setError(cause instanceof Error ? cause.message : "Could not load connections.");
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return { connections, error, ready, reload };
 };

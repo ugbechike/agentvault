@@ -3,26 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
+import { useBrowserSession } from "@/hooks/use-browser-session";
 import { useIsClient } from "@/hooks/use-is-client";
 
 export const SessionGate = ({ children }: { children: React.ReactNode }) => {
-  const { state } = useDemoWorkspace();
+  const session = useBrowserSession();
   const ready = useIsClient();
   const router = useRouter();
 
   useEffect(() => {
-    if (ready && !state.session) {
-      router.replace("/sign-in");
-    }
-  }, [ready, router, state.session]);
+    if (ready && !session) router.replace("/sign-in");
+  }, [ready, router, session]);
 
-  if (!ready || !state.session) {
-    return (
-      <div className="grid min-h-screen place-items-center bg-paper text-sm text-ink-soft">
-        Opening the demo workspace…
-      </div>
-    );
+  if (!ready || !session) {
+    return <div className="grid min-h-screen place-items-center bg-paper text-sm text-ink-soft">Opening AgentVault…</div>;
   }
 
   return children;

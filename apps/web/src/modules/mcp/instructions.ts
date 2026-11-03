@@ -9,7 +9,7 @@ export const cursorConfig = (url: string): string =>
         agentvault: {
           url,
           headers: {
-            Authorization: "Bearer <MCP consumer credential — not issued>",
+            Authorization: "Bearer <paste the credential issued for this agent>",
           },
         },
       },
@@ -26,7 +26,7 @@ export const claudeCodeConfig = (url: string): string =>
           type: "http",
           url,
           headers: {
-            Authorization: "Bearer <MCP consumer credential — not issued>",
+            Authorization: "Bearer <paste the credential issued for this agent>",
           },
         },
       },

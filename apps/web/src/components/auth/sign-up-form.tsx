@@ -7,10 +7,9 @@ import { useState } from "react";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, TextInput } from "@/components/ui/field";
-import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
+import { registerAccount } from "@/modules/auth/dashboard-auth";
 
 export const SignUpForm = () => {
-  const { signUp } = useDemoWorkspace();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string>();
@@ -23,7 +22,7 @@ export const SignUpForm = () => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
         setPending(true);
-        void signUp({
+        void registerAccount({
           name: data.get("name"),
           email: data.get("email"),
           password: data.get("password"),
