@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - "@tailwindcss/oxide"
+
+# Vitest 3 cannot load Vite 7. Keep Next's Vite 7, and pin the copy Vitest requires.
+overrides:
+  "vitest>vite": "6.4.5"

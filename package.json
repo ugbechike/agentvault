@@ -1,0 +1,23 @@
+{
+  "name": "agentvault-poc",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @agentvault/web --filter @agentvault/api dev",
+    "dev:web": "pnpm --filter @agentvault/web dev",
+    "dev:api": "pnpm --filter @agentvault/api dev",
+    "build": "pnpm --filter @agentvault/shared typecheck && pnpm --filter @agentvault/api build && pnpm --filter @agentvault/web build",
+    "typecheck": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web typecheck",
+    "lint": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web lint",
+    "test": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3"
+  }
+}
