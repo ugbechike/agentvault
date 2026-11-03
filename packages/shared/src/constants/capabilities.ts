@@ -31,7 +31,7 @@ export const capabilityCatalog: readonly CapabilityDefinition[] = [
     id: "supabase.read",
     provider: "supabase",
     label: "Supabase read",
-    description: "View the selected Supabase project and run read-only queries.",
+    description: "View tables in the selected Supabase project. Arbitrary SQL is not included.",
   },
   {
     id: "supabase.write",

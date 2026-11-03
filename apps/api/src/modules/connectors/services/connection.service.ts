@@ -1,16 +1,57 @@
-import type { CreateConnectionInput, ProviderId } from "@agentvault/shared";
-
-import { AppError } from "@/lib/errors/app-error";
-import { getConnectorAdapter } from "@/modules/connectors/registry/connector-registry";
-import { getDatabase } from "@/db/client";
-import { connectorDefinitions, discoveredTools, userConnections } from "@/db/schema";
+import type { CapabilityId, CreateConnectionInput, ProviderId } from "@agentvault/shared";
+import { capabilityIds } from "@agentvault/shared";
 import { and, eq } from "drizzle-orm";
 
-export const listConnectors = async () => {
-  return getDatabase().select().from(connectorDefinitions);
+import { getDatabase } from "@/db/client";
+import { connectorDefinitions, discoveredTools, userConnections } from "@/db/schema";
+import { AppError } from "@/lib/errors/app-error";
+import { getConnectorAdapter } from "@/modules/connectors/registry/connector-registry";
+import { deleteConnectionCredential } from "@/modules/connectors/services/credential-store";
+import { revokeGithubCredential } from "@/modules/connectors/oauth/github-oauth";
+
+const asCapabilities = (value: unknown): CapabilityId[] => {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is CapabilityId => capabilityIds.includes(item as CapabilityId));
 };
 
-export const getConnector = async (provider: ProviderId) => {
+export interface LoadedConnection {
+  id: string;
+  userId: string;
+  provider: ProviderId;
+  providerAccountId: string | null;
+  encryptedCredentialReference: string | null;
+  status: string;
+  statusDetail: string | null;
+  grantedCapabilities: CapabilityId[];
+  readOnly: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  tools: (typeof discoveredTools.$inferSelect)[];
+}
+
+const publicConnection = (connection: LoadedConnection) => ({
+  id: connection.id,
+  provider: connection.provider,
+  providerAccountId: connection.providerAccountId,
+  status: connection.status,
+  statusDetail: connection.statusDetail,
+  grantedCapabilities: connection.grantedCapabilities,
+  readOnly: connection.readOnly,
+  createdAt: connection.createdAt,
+  updatedAt: connection.updatedAt,
+  tools: connection.tools.map((tool) => ({
+    id: tool.id,
+    upstreamToolName: tool.upstreamToolName,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
+    requiredCapability: tool.requiredCapability,
+    enabled: tool.enabled,
+  })),
+});
+
+export const listConnectors = async () => getDatabase().select().from(connectorDefinitions);
+
+export const getConnector = async (provider: ProviderId, userId: string) => {
   const db = getDatabase();
   const [definition] = await db
     .select()
@@ -20,95 +61,49 @@ export const getConnector = async (provider: ProviderId) => {
   if (!definition) {
     throw new AppError(404, "CONNECTOR_NOT_FOUND", `Connector ${provider} was not found.`);
   }
-  const connections = await db
-  .select()
-  .from(userConnections)
-  .where(eq(userConnections.connectorId, definition.id));
-  return { ...definition, connections };
+  const connections = await listConnections(userId);
+  return { ...definition, connections: connections.filter((connection) => connection.provider === provider) };
 };
 
-// listConnections is a helper function to list all connections for the signed-in user
 export const listConnections = async (userId: string) => {
-  return getDatabase()
+  const rows = await getDatabase()
     .select({
       id: userConnections.id,
       provider: connectorDefinitions.provider,
       providerAccountId: userConnections.providerAccountId,
       status: userConnections.status,
+      statusDetail: userConnections.statusDetail,
+      grantedCapabilities: userConnections.grantedCapabilities,
+      readOnly: userConnections.readOnly,
       createdAt: userConnections.createdAt,
       updatedAt: userConnections.updatedAt,
     })
     .from(userConnections)
     .innerJoin(connectorDefinitions, eq(userConnections.connectorId, connectorDefinitions.id))
     .where(eq(userConnections.userId, userId));
+  return rows.map((row) => ({
+    ...row,
+    provider: row.provider as ProviderId,
+    grantedCapabilities: asCapabilities(row.grantedCapabilities),
+  }));
 };
 
-// Note: Asks the provider adapater to start authorization, then inserts one user_connections row.
-// The credential column stores the env var name
-// The token stays in .env. initializeConnection rejects a Supabase call that has no projectRef.
-const credentialReferenceByProvider: Record<ProviderId, string> = {
-  github: "GITHUB_MCP_TOKEN",
-  supabase: "SUPABASE_MCP_TOKEN",
-};
-export const createConnection = async (userId: string, input: CreateConnectionInput) => {
-  const adapter = getConnectorAdapter(input.provider);
-  await adapter.initializeConnection({
-    userId,
-    provider: input.provider,
-    projectRef: input.projectRef,
-  });
-  const db = getDatabase();
-  const [definition] = await db
-    .select()
-    .from(connectorDefinitions)
-    .where(eq(connectorDefinitions.provider, input.provider))
-    .limit(1);
-  if (!definition) {
-    throw new AppError(404, "CONNECTOR_NOT_FOUND", `Connector ${input.provider} was not found.`);
+export const createConnection = async (_userId: string, input: CreateConnectionInput): Promise<never> => {
+  if (input.provider === "github") {
+    throw new AppError(
+      400,
+      "OAUTH_REQUIRED",
+      "GitHub connections start from authorization. Use the Connect GitHub action.",
+    );
   }
-
-  const credentialReference = credentialReferenceByProvider[input.provider];
-  const [existing] = await db
-    .select()
-    .from(userConnections)
-    .where(and(eq(userConnections.userId, userId), eq(userConnections.connectorId, definition.id)))
-    .limit(1);
-  if (existing) {
-    const [updated] = await db
-      .update(userConnections)
-      .set({
-        status: "connected",
-        providerAccountId: input.projectRef ?? existing.providerAccountId,
-        encryptedCredentialReference: credentialReference,
-        updatedAt: new Date(),
-      })
-      .where(eq(userConnections.id, existing.id))
-      .returning();
-    if (!updated) {
-      throw new AppError(500, "CONNECTION_UPDATE_FAILED", "The connection could not be saved.");
-    }
-    return { id: updated.id, provider: input.provider, status: updated.status, providerAccountId: updated.providerAccountId };
-  }
-
-  const [created] = await db
-    .insert(userConnections)
-    .values({
-      userId,
-      connectorId: definition.id,
-      providerAccountId: input.projectRef ?? null,
-      encryptedCredentialReference: credentialReference,
-      status: "connected",
-    })
-    .returning();
-  if (!created) {
-    throw new AppError(500, "CONNECTION_CREATE_FAILED", "The connection could not be saved.");
-  }
-  return { id: created.id, provider: input.provider, status: created.status, providerAccountId: created.providerAccountId };
-
+  throw new AppError(
+    503,
+    "SUPABASE_OAUTH_UNAVAILABLE",
+    "Supabase stays disconnected until a project-scoped OAuth client is configured. Arbitrary SQL is not exposed as a read-only tool.",
+  );
 };
 
-// getConnection is a helper function to get a connection by id from the database
-export const getConnection = async (connectionId: string) =>  {
+const loadConnection = async (connectionId: string): Promise<LoadedConnection> => {
   const db = getDatabase();
   const [row] = await db
     .select({ connection: userConnections, provider: connectorDefinitions.provider })
@@ -116,39 +111,77 @@ export const getConnection = async (connectionId: string) =>  {
     .innerJoin(connectorDefinitions, eq(userConnections.connectorId, connectorDefinitions.id))
     .where(eq(userConnections.id, connectionId))
     .limit(1);
-
-  if (!row) {
-    throw new AppError(404, "CONNECTION_NOT_FOUND", `Connection ${connectionId} not found`);
-  }
-
-  const tools = await db
-    .select()
-    .from(discoveredTools)
-    .where(eq(discoveredTools.connectionId, connectionId));
-
-  return { ...row.connection, provider: row.provider as ProviderId, tools };
+  if (!row) throw new AppError(404, "CONNECTION_NOT_FOUND", "Connection not found.");
+  const tools = await db.select().from(discoveredTools).where(eq(discoveredTools.connectionId, connectionId));
+  return {
+    id: row.connection.id,
+    userId: row.connection.userId,
+    provider: row.provider as ProviderId,
+    providerAccountId: row.connection.providerAccountId,
+    encryptedCredentialReference: row.connection.encryptedCredentialReference,
+    status: row.connection.status,
+    statusDetail: row.connection.statusDetail,
+    grantedCapabilities: asCapabilities(row.connection.grantedCapabilities),
+    readOnly: row.connection.readOnly,
+    createdAt: row.connection.createdAt,
+    updatedAt: row.connection.updatedAt,
+    tools,
+  };
 };
 
-//Note: deleteConnection — closes the cached upstream client, then marks the row disconnected.
-export const deleteConnection = async (connectionId: string) => {
-  const connection = await getConnection(connectionId);
+export const getConnection = async (connectionId: string): Promise<LoadedConnection> => loadConnection(connectionId);
+
+export const getOwnedConnection = async (userId: string, connectionId: string) => {
+  const connection = await loadConnection(connectionId);
+  if (connection.userId !== userId) {
+    throw new AppError(404, "CONNECTION_NOT_FOUND", "Connection not found.");
+  }
+  return publicConnection(connection);
+};
+
+export const setConnectionStatus = async (
+  connectionId: string,
+  status: "connected" | "error" | "disconnected" | "pending",
+  statusDetail: string | null,
+): Promise<void> => {
+  await getDatabase()
+    .update(userConnections)
+    .set({ status, statusDetail, updatedAt: new Date() })
+    .where(eq(userConnections.id, connectionId));
+};
+
+export const deleteConnection = async (userId: string, connectionId: string) => {
+  const connection = await loadConnection(connectionId);
+  if (connection.userId !== userId) {
+    throw new AppError(404, "CONNECTION_NOT_FOUND", "Connection not found.");
+  }
   const adapter = getConnectorAdapter(connection.provider);
   await adapter.disconnect({ connectionId: connection.id, provider: connection.provider });
+  const credential = await deleteConnectionCredential(connection.id);
+  if (connection.provider === "github" && credential) {
+    await revokeGithubCredential(credential.accessToken);
+  }
   const [updated] = await getDatabase()
     .update(userConnections)
-    .set({ status: "disconnected", updatedAt: new Date() })
-    .where(eq(userConnections.id, connectionId))
-    .returning();
+    .set({
+      status: "disconnected",
+      statusDetail: null,
+      encryptedCredentialReference: null,
+      grantedCapabilities: [],
+      updatedAt: new Date(),
+    })
+    .where(and(eq(userConnections.id, connectionId), eq(userConnections.userId, userId)))
+    .returning({ id: userConnections.id, status: userConnections.status });
   return updated;
 };
 
-/**
- * validateConnection — loads the row and asks that provider's adapter to discover tools. POST /api/connections/:id/validate currently skips this and calls syncDiscoveredTools directly.
- */
-export const validateConnection = async (connectionId: string) => {
-  const connection = await getConnection(connectionId);
+export const validateConnection = async (userId: string, connectionId: string) => {
+  const connection = await loadConnection(connectionId);
+  if (connection.userId !== userId) {
+    throw new AppError(404, "CONNECTION_NOT_FOUND", "Connection not found.");
+  }
   if (!connection.encryptedCredentialReference) {
-    throw new AppError(400, "CREDENTIAL_MISSING", "This connection has no credential reference.");
+    throw new AppError(400, "CREDENTIAL_MISSING", "This connection has no stored credential.");
   }
   const adapter = getConnectorAdapter(connection.provider);
   return adapter.validateConnection({

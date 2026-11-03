@@ -1,4 +1,5 @@
 export {
+  changePasswordSchema,
   forgotPasswordSchema,
   loginSchema,
   refreshSessionSchema,
@@ -6,6 +7,7 @@ export {
   updateProfileSchema,
 } from "./auth";
 export type {
+  ChangePasswordInput,
   ForgotPasswordInput,
   LoginInput,
   RefreshSessionInput,
@@ -21,5 +23,10 @@ export {
   providerParamSchema,
 } from "./connections";
 export type { AuditQuery, CreateConnectionInput } from "./connections";
-export { permissionCheckSchema, putAgentPermissionSchema } from "./permissions";
-export type { PermissionCheckInput, PutAgentPermissionInput } from "./permissions";
+export { permissionCheckSchema, putAgentPermissionSchema, saveAgentAccessSchema } from "./permissions";
+export type {
+  PermissionCheckInput,
+  PutAgentPermissionInput,
+  ResourceAccess,
+  SaveAgentAccessInput,
+} from "./permissions";

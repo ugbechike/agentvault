@@ -29,6 +29,16 @@ export const registerErrorHandler = (app: FastifyInstance): void => {
       });
     }
 
+    const fastifyStatus = typeof error === "object" && error && "statusCode" in error ? Number(error.statusCode) : 500;
+    if (fastifyStatus >= 400 && fastifyStatus < 500) {
+      return reply.status(fastifyStatus).send({
+        error: {
+          code: "BAD_REQUEST",
+          message: "The request could not be read.",
+        },
+      });
+    }
+
     request.log.error({ err: error }, "Unhandled error");
     return reply.status(500).send({
       error: {

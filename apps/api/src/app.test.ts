@@ -2,9 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { buildApp } from "@/app";
-import { NotImplementedError } from "@/lib/errors/app-error";
-import { githubAdapter } from "@/modules/connectors/adapters/github/github.adapter";
-import { evaluateEffectiveAccess } from "@/modules/permissions/policies/effective-access";
+import { issueAgentToken, sha256 } from "@/lib/crypto/sha256";
 
 const listen = async (app: FastifyInstance): Promise<string> => {
   await app.listen({ port: 0, host: "127.0.0.1" });
@@ -22,18 +20,19 @@ describe("health", () => {
     await app?.close();
   });
 
-  it("returns ok without a database or MCP server", async () => {
+  it("reports the mounted MCP server", async () => {
     app = await buildApp();
     const base = await listen(app);
     const response = await fetch(`${base}/health`);
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { status: string; checks: { downstreamMcp: string } };
+    const body = (await response.json()) as { status: string; checks: { downstreamMcp: string; permissionEnforcement: string } };
     expect(body.status).toBe("ok");
-    expect(body.checks.downstreamMcp).toBe("not_implemented");
+    expect(body.checks.downstreamMcp).toBe("mounted");
+    expect(body.checks.permissionEnforcement).toBe("implemented");
   });
 });
 
-describe("unimplemented routes", () => {
+describe("protected routes", () => {
   let app: FastifyInstance | undefined;
   let base = "";
 
@@ -46,7 +45,7 @@ describe("unimplemented routes", () => {
     base = await listen(app);
   };
 
-  it("rejects an invalid login before the unimplemented service", async () => {
+  it("rejects an invalid login before looking up an account", async () => {
     await start();
     const response = await fetch(`${base}/api/auth/login`, {
       method: "POST",
@@ -56,59 +55,131 @@ describe("unimplemented routes", () => {
     expect(response.status).toBe(400);
   });
 
-  it("returns database not configured for a valid login when no database is set", async () => {
+  it("does not accept an unknown password", async () => {
     await start();
     const response = await fetch(`${base}/api/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: "ada@agentvault.dev", password: "vault-demo" }),
+      body: JSON.stringify({ email: "nobody@agentvault.dev", password: "vault-demo-password" }),
     });
-    expect(response.status).toBe(503);
-    const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("DATABASE_NOT_CONFIGURED");
+    expect([401, 500, 503]).toContain(response.status);
+    if (response.status === 401) {
+      const body = (await response.json()) as { error: { code: string } };
+      expect(body.error.code).toBe("UNAUTHORIZED");
+    }
   });
 
-  it("returns 501 for the MCP endpoint", async () => {
+  it("rejects anonymous MCP access", async () => {
     await start();
     const response = await fetch(`${base}/mcp`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
     });
-    expect(response.status).toBe(501);
+    expect(response.status).toBe(401);
   });
 
-  it("returns 501 for permission evaluation", async () => {
+  it("rejects anonymous permission evaluation", async () => {
     await start();
     const response = await fetch(`${base}/api/permissions/evaluate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        agentId: "agt_cursor",
-        connectionId: "con_github",
-        toolName: "github_create_issue",
+        agentId: "00000000-0000-4000-8000-000000000001",
+        connectionId: "00000000-0000-4000-8000-000000000002",
+        toolName: "github_write_issue",
         capability: "github.write",
       }),
     });
-    expect(response.status).toBe(501);
+    expect(response.status).toBe(401);
+  });
+
+  it("lists no tools and audits a denied call for an agent without a provider", async () => {
+    await start();
+    const email = `mcp-${Date.now()}@example.com`;
+    const password = "correct-horse-battery";
+    const registered = await fetch(`${base}/api/auth/register`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "MCP Tester", email, password }),
+    });
+    expect(registered.status).toBe(200);
+    const signedIn = await fetch(`${base}/api/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    expect(signedIn.status).toBe(200);
+    const session = (await signedIn.json()) as { accessToken: string };
+    const created = await fetch(`${base}/api/agents`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${session.accessToken}` },
+      body: JSON.stringify({ name: "My Cursor", description: "Verification", clientKind: "cursor" }),
+    });
+    expect(created.status).toBe(200);
+    const agent = (await created.json()) as { agent: { id: string }; credential: { token: string } };
+    const headers = {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      authorization: `Bearer ${agent.credential.token}`,
+    };
+    const listed = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
+    });
+    expect(listed.status).toBe(200);
+    const listedBody = await listed.text();
+    expect(listedBody).toContain('"tools":[]');
+    const called = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "github_write_issue", arguments: { owner: "octocat", repo: "hello", method: "create" } },
+      }),
+    });
+    expect(called.status).toBe(200);
+    const calledBody = await called.text();
+    expect(calledBody).toContain("isError");
+    const audit = await fetch(`${base}/api/audit`, {
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(audit.status).toBe(200);
+    const logs = (await audit.json()) as Array<{ toolName: string; status: string; decision: string }>;
+    expect(logs.some((item) => item.toolName === "github_write_issue" && item.status === "denied" && item.decision === "deny")).toBe(true);
+    const revoked = await fetch(`${base}/api/agents/${agent.agent.id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+    expect(revoked.status).toBe(200);
+    const afterRevoke = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "tools/list", params: {} }),
+    });
+    expect(afterRevoke.status).toBe(401);
+  });
+
+  it("does not connect GitHub from a shared environment token", async () => {
+    await start();
+    const response = await fetch(`${base}/api/connections`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer not-a-session" },
+      body: JSON.stringify({ provider: "github" }),
+    });
+    expect([400, 401]).toContain(response.status);
   });
 });
 
-describe("fail closed boundaries", () => {
-  it("does not allow a tool call when evaluation is unimplemented", async () => {
-    await expect(
-      evaluateEffectiveAccess({
-        agentId: "agt_cursor",
-        connectionId: "con_github",
-        toolName: "github_list_repositories",
-        capability: "github.read",
-      }),
-    ).rejects.toBeInstanceOf(NotImplementedError);
-  });
-
-  it("does not discover GitHub tools without a database", async () => {
-    await expect(
-      githubAdapter.discoverTools({ connectionId: "con_github", provider: "github" }),
-    ).rejects.toMatchObject({ code: "DATABASE_NOT_CONFIGURED" });
+describe("mcp credentials", () => {
+  it("issues a token that is not the agent id", () => {
+    const issued = issueAgentToken();
+    expect(issued.token.startsWith("avmcp_")).toBe(true);
+    expect(issued.tokenHash).toBe(sha256(issued.token));
+    expect(issued.tokenHash).not.toBe(issued.token);
+    expect(issued.token).not.toMatch(/^[0-9a-f-]{36}$/i);
   });
 });

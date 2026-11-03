@@ -1,48 +1,77 @@
-import { illustrativeAllowlist, McpConsumerIdentity, type DownstreamToolContext, type ToolCallResult } from "@agentvault/shared";
+import { illustrativeAllowlist, type DownstreamToolContext, type McpConsumerIdentity, type ToolCallResult } from "@agentvault/shared";
 
-import { AdvertisedTool, listAdvertisedTools } from "./tool-registry";
+import { AppError } from "@/lib/errors/app-error";
 import { authenticateMcpConsumer } from "@/modules/auth/services/mcp-consumer-auth.service";
-import { callRoutedTool, routeToolCall } from "../gateway/tool-router";
+import { recordAuditLog } from "@/modules/audit/services/audit.service";
+import { callRoutedTool, routeToolCall } from "@/modules/mcp/gateway/tool-router";
 import { evaluateEffectiveAccess } from "@/modules/permissions/policies/effective-access";
 
-export const handleToolsList = async (agentId: string): Promise<readonly AdvertisedTool[]>=> {
-  return await listAdvertisedTools(agentId);
-};
+import { listAdvertisedTools, type AdvertisedTool } from "./tool-registry";
 
-// Note: the wrapper to handle tool calls
+const textResult = (text: string, isError: boolean): ToolCallResult => ({
+  content: [{ type: "text", text }],
+  isError,
+});
+
+export const handleToolsList = async (agentId: string): Promise<readonly AdvertisedTool[]> => listAdvertisedTools(agentId);
+
 export const handleToolsCall = async (context: DownstreamToolContext): Promise<ToolCallResult> => {
-  // Note: Match and check if the tool is allowlisted
-  const match = illustrativeAllowlist.find(tool => tool.agentvaultName === context.agentvaultToolName);
+  const started = Date.now();
+  const match = illustrativeAllowlist.find((tool) => tool.agentvaultName === context.agentvaultToolName);
+  const finish = async (
+    result: ToolCallResult,
+    decision: "allow" | "deny",
+    status: "success" | "failure" | "denied",
+    connectionId: string | null,
+    errorCode: string | null,
+  ): Promise<ToolCallResult> => {
+    await recordAuditLog({
+      userId: context.userId,
+      agentId: context.agentId,
+      connectionId,
+      toolName: context.agentvaultToolName,
+      decision,
+      status,
+      durationMs: Date.now() - started,
+      errorCode,
+    }).catch(() => undefined);
+    return result;
+  };
+
   if (!match) {
-    throw new Error(`Tool ${context.agentvaultToolName} not found in allowlist`);
+    return finish(textResult("That tool is not available.", true), "deny", "denied", null, "TOOL_NOT_ALLOWLISTED");
   }
 
-  // Note: Route the tool call to the upstream tool
-  const routed = await routeToolCall(context.userId, context.agentvaultToolName, context.arguments);
-
-  // Note: Evaluate the effective access to the tool
-  const decision = await evaluateEffectiveAccess({
-    agentId: context.agentId,
-    connectionId: routed.upstream.connectionId,
-    toolName: routed.agentvaultToolName,
-    capability: match.requiredCapability,
-  });
-
-  if (decision.outcome !== "allow") {
-    return {
-      content: [{
-        type: "text",
-        text: decision.reason,
-      }],
-      isError: true,
+  let connectionId: string | null = null;
+  try {
+    const routed = await routeToolCall(context.userId, context.agentvaultToolName, context.arguments);
+    connectionId = routed.upstream.connectionId;
+    const decision = await evaluateEffectiveAccess(
+      {
+        agentId: context.agentId,
+        connectionId,
+        toolName: context.agentvaultToolName,
+        capability: match.requiredCapability,
+      },
+      { arguments: context.arguments },
+    );
+    if (decision.outcome !== "allow") {
+      return finish(textResult(decision.reason, true), "deny", "denied", connectionId, decision.reasonCode);
     }
+    const result = await callRoutedTool(routed);
+    return finish(
+      result,
+      "allow",
+      result.isError ? "failure" : "success",
+      connectionId,
+      result.isError ? "UPSTREAM_FAILURE" : null,
+    );
+  } catch (error) {
+    const code = error instanceof AppError ? error.code : "TOOL_CALL_FAILED";
+    const message = error instanceof AppError ? error.message : "The tool call was rejected.";
+    return finish(textResult(message, true), "deny", "denied", connectionId, code);
   }
-
-  // Note: Call the upstream tool
-  return callRoutedTool(routed);
- 
 };
 
-export const authenticateCaller = async (authorizationHeader: string | undefined): Promise<McpConsumerIdentity>=> {
-  return await authenticateMcpConsumer(authorizationHeader);
-};
+export const authenticateCaller = async (authorizationHeader: string | undefined): Promise<McpConsumerIdentity> =>
+  authenticateMcpConsumer(authorizationHeader);

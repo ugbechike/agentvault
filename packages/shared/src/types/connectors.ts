@@ -12,7 +12,9 @@ export interface UserConnection {
   /** Opaque pointer to stored credentials. Never a plaintext OAuth token. */
   encryptedCredentialReference: string | null;
   status: ConnectionStatus;
+  statusDetail: string | null;
   grantedCapabilities: readonly CapabilityId[];
+  readOnly: boolean;
   createdAt: string;
   updatedAt: string;
 }

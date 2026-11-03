@@ -9,8 +9,10 @@ export interface UpstreamConnectionConfig {
   endpoint: string;
   /** Opaque credential reference. Never a raw access token. */
   credentialReference: string | null;
-  /** Supabase only. Appended by the future Supabase adapter, not by a shared client. */
+  /** Supabase only. Appended as project_ref. */
   projectRef?: string;
+  /** Supabase only. When true, the remote URL includes read_only=true. */
+  readOnly?: boolean;
 }
 
 export interface UpstreamToolDefinition {

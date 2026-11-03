@@ -12,12 +12,11 @@ export const auditLogs = pgTable("audit_logs", {
   agentId: uuid("agent_id")
     .notNull()
     .references(() => agents.id, { onDelete: "cascade" }),
-  connectionId: uuid("connection_id")
-    .notNull()
-    .references(() => userConnections.id, { onDelete: "cascade" }),
+  connectionId: uuid("connection_id").references(() => userConnections.id, { onDelete: "cascade" }),
   toolName: text("tool_name").notNull(),
   decision: text("decision").notNull(),
   status: text("status").notNull(),
   durationMs: integer("duration_ms"),
+  errorCode: text("error_code"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,4 +1,4 @@
-import { illustrativeAllowlist, ProviderId, type MappedAgentVaultTool, type UpstreamToolDefinition } from "@agentvault/shared";
+import { illustrativeAllowlist, type MappedAgentVaultTool, type ProviderId, type UpstreamToolDefinition } from "@agentvault/shared";
 
 
 export interface MapToolInput {

@@ -8,6 +8,13 @@
       "when": 1793630203547,
       "tag": "0000_large_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793700000000,
+      "tag": "0001_complete_poc",
+      "breakpoints": true
     }
   ]
 }

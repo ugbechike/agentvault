@@ -1,50 +1,64 @@
-import type { UpstreamToolDefinition } from "@agentvault/shared";
+import { illustrativeAllowlist, type CapabilityId, type ConnectionValidation, type UpstreamToolDefinition } from "@agentvault/shared";
+import { eq } from "drizzle-orm";
 
-import { connectUpstream } from "./client-manager";
-import { illustrativeAllowlist, type ConnectionValidation } from "@agentvault/shared";
 import { getDatabase } from "@/db/client";
 import { discoveredTools } from "@/db/schema";
-import { getConnection } from "@/modules/connectors/services/connection.service";
+import { AppError } from "@/lib/errors/app-error";
+import { getConnection, setConnectionStatus } from "@/modules/connectors/services/connection.service";
 
+import { connectUpstream, disconnectUpstream } from "./client-manager";
 
-// Note: This function is used to discover the tools available on the upstream MCP server.
-// This is how agentvault learns the upstream tools names and descriptions.
-export const discoverUpstreamTools = async (
-  connectionId: string,
-): Promise<readonly UpstreamToolDefinition[]> => {
- const {handle} = await connectUpstream(connectionId);
- const result = await handle.client.listTools();
- return result.tools.map(tool => ({
-  upstreamName: tool.name,
-  description: tool.description ?? "",
-  inputSchema: tool.inputSchema as Record<string, unknown>,
- }))
+export const discoverUpstreamTools = async (connectionId: string): Promise<readonly UpstreamToolDefinition[]> => {
+  const { handle } = await connectUpstream(connectionId);
+  const result = await handle.client.listTools();
+  return result.tools.map((tool) => ({
+    upstreamName: tool.name,
+    description: tool.description ?? "",
+    inputSchema: (tool.inputSchema ?? {}) as Record<string, unknown>,
+  }));
 };
 
-
-export const syncDiscoveredTools = async (
-  connectionId: string,
-): Promise<ConnectionValidation> => {
+export const syncDiscoveredTools = async (connectionId: string): Promise<ConnectionValidation> => {
   const connection = await getConnection(connectionId);
-  const tools = await discoverUpstreamTools(connectionId);
-  const rows = tools.flatMap((tool) => {
+  let tools: readonly UpstreamToolDefinition[];
+  try {
+    tools = await discoverUpstreamTools(connectionId);
+  } catch (error) {
+    await disconnectUpstream(connectionId);
+    const message = error instanceof AppError ? error.message : "The upstream MCP server did not accept this credential.";
+    await setConnectionStatus(connectionId, "error", message);
+    throw error instanceof AppError
+      ? error
+      : new AppError(502, "UPSTREAM_DISCOVERY_FAILED", "The upstream MCP server did not accept this credential.");
+  }
+
+  const db = getDatabase();
+  await db.delete(discoveredTools).where(eq(discoveredTools.connectionId, connectionId));
+  const rows = tools.map((tool) => {
     const match = illustrativeAllowlist.find(
-      (entry) =>
-        entry.provider === connection.provider &&
-        entry.exampleUpstreamName === tool.upstreamName,
+      (entry) => entry.provider === connection.provider && entry.exampleUpstreamName === tool.upstreamName,
     );
-    if (!match) return [];
-    return [{
+    const requiredCapability: CapabilityId = match?.requiredCapability ?? (connection.provider === "github" ? "github.read" : "supabase.read");
+    const expose = Boolean(match) && (connection.provider !== "supabase" || connection.readOnly);
+    return {
       connectionId,
       upstreamToolName: tool.upstreamName,
       description: tool.description,
       inputSchema: tool.inputSchema,
-      requiredCapability: match.requiredCapability,
-      enabled: true,
-    }];
+      requiredCapability,
+      enabled: expose,
+    };
   });
   if (rows.length > 0) {
-    await getDatabase().insert(discoveredTools).values(rows).onConflictDoNothing();
+    await db.insert(discoveredTools).values(rows);
   }
-  return { ok: rows.length > 0, checkedAt: new Date().toISOString() };
+  const enabled = rows.filter((row) => row.enabled).length;
+  await setConnectionStatus(
+    connectionId,
+    "connected",
+    enabled > 0
+      ? `Authorized as ${connection.providerAccountId ?? "the provider account"}. ${enabled} capabilities are available.`
+      : "Authorized, but none of the discovered tools are on the AgentVault allowlist.",
+  );
+  return { ok: true, checkedAt: new Date().toISOString() };
 };

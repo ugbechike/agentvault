@@ -14,9 +14,12 @@ const envSchema = z.object({
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   DATABASE_URL: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-  JWT_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  JWT_SECRET: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
+  CREDENTIAL_ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().min(16).optional()),
+  API_PUBLIC_URL: z.string().url().default("http://localhost:4000"),
   GITHUB_OAUTH_CLIENT_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   GITHUB_OAUTH_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  GITHUB_OAUTH_REDIRECT_URI: z.preprocess(emptyToUndefined, z.string().url().optional()),
   SUPABASE_OAUTH_CLIENT_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   SUPABASE_OAUTH_CLIENT_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
 });

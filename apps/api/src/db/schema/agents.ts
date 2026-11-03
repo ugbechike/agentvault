@@ -9,6 +9,7 @@ export const agents = pgTable("agents", {
     .references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description").notNull().default(""),
+  clientKind: text("client_kind").notNull().default("custom"),
   status: text("status").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

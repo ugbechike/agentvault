@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { connectorDefinitions } from "./connectors";
 import { users } from "./users";
@@ -18,8 +19,14 @@ export const userConnections = pgTable(
       .notNull()
       .references(() => connectorDefinitions.id, { onDelete: "restrict" }),
     providerAccountId: text("provider_account_id"),
+    /**
+     * Opaque id of a connection_secrets row. Never an access token or an environment variable name.
+     */
     encryptedCredentialReference: text("encrypted_credential_reference"),
     status: text("status").notNull(),
+    statusDetail: text("status_detail"),
+    grantedCapabilities: jsonb("granted_capabilities").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    readOnly: boolean("read_only").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

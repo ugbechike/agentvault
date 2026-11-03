@@ -9,6 +9,10 @@ export type PermissionReasonCode =
   | "TOOL_NOT_ALLOWLISTED"
   | "CONNECTION_INACTIVE"
   | "AGENT_REVOKED"
+  | "TOOL_POLICY_DENY"
+  | "UNKNOWN_OPERATION"
+  | "RESOURCE_DENIED"
+  | "RESOURCE_UNSCOPED"
   | "EVALUATION_NOT_IMPLEMENTED";
 
 export interface AgentPermissionRecord {

@@ -7,6 +7,7 @@ import { AppError } from "@/lib/errors/app-error";
 export interface UserRecord {
   id: string;
   email: string;
+  name: string;
   passwordHash: string;
   createdAt: Date;
   updatedAt: Date;
@@ -14,6 +15,7 @@ export interface UserRecord {
 
 export interface CreateUserRecord {
   email: string;
+  name: string;
   passwordHash: string;
 }
 
@@ -26,6 +28,7 @@ export interface UserRepository {
 const toRecord = (row: typeof users.$inferSelect): UserRecord => ({
   id: row.id,
   email: row.email,
+  name: row.name,
   passwordHash: row.passwordHash,
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
@@ -49,6 +52,7 @@ export const userRepository: UserRepository = {
       .insert(users)
       .values({
         email: input.email,
+        name: input.name,
         passwordHash: input.passwordHash,
       })
       .returning();

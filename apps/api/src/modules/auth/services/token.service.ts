@@ -1,9 +1,13 @@
+import { eq } from "drizzle-orm";
 import { SignJWT, jwtVerify } from "jose";
 
 import type { DashboardSession } from "@agentvault/shared";
 
+import { getDatabase } from "@/db/client";
+import { refreshTokens } from "@/db/schema";
 import { env } from "@/lib/config/env";
-import { AppError, NotImplementedError } from "@/lib/errors/app-error";
+import { sha256 } from "@/lib/crypto/sha256";
+import { AppError } from "@/lib/errors/app-error";
 
 export interface AccessTokenClaims {
   sub: string;
@@ -37,6 +41,11 @@ const signToken = async (
 export const issueDashboardSession = async (userId: string, email: string): Promise<DashboardSession> => {
   const accessToken = await signToken(userId, email, "access", accessTtlSeconds);
   const refreshToken = await signToken(userId, email, "refresh", refreshTtlSeconds);
+  await getDatabase().insert(refreshTokens).values({
+    userId,
+    tokenHash: sha256(refreshToken),
+    expiresAt: new Date(Date.now() + refreshTtlSeconds * 1000),
+  });
   return {
     userId,
     accessToken,
@@ -61,9 +70,35 @@ export const verifyAccessToken = async (token: string | undefined): Promise<Acce
   }
 };
 
-export const rotateRefreshToken = async (_refreshToken: string): Promise<DashboardSession> => {
-  throw new NotImplementedError(
-    "Refresh token rotation is not implemented.",
-    "TODO(AUTH): Validate the refresh token, rotate it, and issue a new dashboard session.",
-  );
+export const rotateRefreshToken = async (refreshToken: string): Promise<DashboardSession> => {
+  let userId = "";
+  let email = "";
+  try {
+    const { payload } = await jwtVerify(refreshToken, signingKey());
+    if (payload.use !== "refresh" || typeof payload.sub !== "string" || typeof payload.email !== "string") {
+      throw new Error("rejected");
+    }
+    userId = payload.sub;
+    email = payload.email;
+  } catch {
+    throw new AppError(401, "UNAUTHORIZED", "Refresh token was rejected.");
+  }
+  const tokenHash = sha256(refreshToken);
+  const [row] = await getDatabase()
+    .select()
+    .from(refreshTokens)
+    .where(eq(refreshTokens.tokenHash, tokenHash))
+    .limit(1);
+  if (!row || row.revokedAt || row.expiresAt.getTime() < Date.now() || row.userId !== userId) {
+    throw new AppError(401, "UNAUTHORIZED", "Refresh token was rejected.");
+  }
+  await getDatabase().update(refreshTokens).set({ revokedAt: new Date() }).where(eq(refreshTokens.id, row.id));
+  return issueDashboardSession(userId, email);
+};
+
+export const revokeUserRefreshTokens = async (userId: string): Promise<void> => {
+  await getDatabase()
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(eq(refreshTokens.userId, userId));
 };

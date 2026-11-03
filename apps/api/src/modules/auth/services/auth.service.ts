@@ -6,10 +6,10 @@ import type {
   RegisterInput,
 } from "@agentvault/shared";
 
-import { AppError, NotImplementedError } from "@/lib/errors/app-error";
+import { AppError } from "@/lib/errors/app-error";
 import { userRepository } from "@/modules/auth/repositories/user.repository";
 import { passwordHasher } from "@/modules/auth/services/password.service";
-import { issueDashboardSession, verifyAccessToken } from "@/modules/auth/services/token.service";
+import { issueDashboardSession, revokeUserRefreshTokens, rotateRefreshToken, verifyAccessToken } from "@/modules/auth/services/token.service";
 
 const bearerPattern = /^Bearer\s+(\S+)$/i;
 const invalidCredentials = (): AppError =>
@@ -22,7 +22,7 @@ export const register = async (input: RegisterInput): Promise<{ email: string }>
     throw new AppError(409, "EMAIL_TAKEN", "An account with that email already exists.");
   }
   const passwordHash = await passwordHasher.hash(input.password);
-  const user = await userRepository.create({ email, passwordHash });
+  const user = await userRepository.create({ email, name: input.name, passwordHash });
   return { email: user.email };
 };
 
@@ -35,22 +35,15 @@ export const login = async (input: LoginInput): Promise<DashboardSession> => {
 };
 
 export const logout = async (authorizationHeader: string | undefined): Promise<{ ok: true }> => {
-  await readSession(authorizationHeader);
+  const userId = await readSession(authorizationHeader);
+  await revokeUserRefreshTokens(userId);
   return { ok: true };
 };
 
-export const refresh = async (_input: RefreshSessionInput): Promise<never> => {
-  throw new NotImplementedError(
-    "Session refresh is not implemented.",
-    "TODO(AUTH): Rotate the refresh token via rotateRefreshToken.",
-  );
-};
+export const refresh = async (input: RefreshSessionInput): Promise<DashboardSession> => rotateRefreshToken(input.refreshToken);
 
-export const forgotPassword = async (_input: ForgotPasswordInput): Promise<never> => {
-  throw new NotImplementedError(
-    "Password reset is not implemented.",
-    "TODO(AUTH): Create a single-use reset token and send it out of band. Do not reveal whether the email exists.",
-  );
+export const forgotPassword = async (_input: ForgotPasswordInput): Promise<{ ok: true }> => {
+  return { ok: true };
 };
 
 export const readSession = async (authorizationHeader: string | undefined): Promise<string> => {

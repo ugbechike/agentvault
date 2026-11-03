@@ -26,13 +26,23 @@ export const createDownstreamMcpServer = (): DownstreamMcpServer => {
       if (!agent) throw new Error("MCP caller was not found.");
 
 
-      const server = new McpServer({ name: "agentvault", version: "1.0.0",});
+      const server = new McpServer(
+        { name: "agentvault", version: "1.0.0" },
+        { capabilities: { tools: { listChanged: false } } },
+      );
       const tools = await handleToolsList(agent.id);
 
       for (const tool of tools) {
+        const inputSchema = (() => {
+          try {
+            return z.fromJSONSchema(tool.inputSchema);
+          } catch {
+            return z.object({}).catchall(z.unknown());
+          }
+        })();
         server.registerTool(tool.agentvaultName, {
           description: tool.description,
-          inputSchema: z.fromJSONSchema(tool.inputSchema),
+          inputSchema,
         }, async (args) => {
           const result  = await handleToolsCall({
             agentId: agent.id,
@@ -49,6 +59,26 @@ export const createDownstreamMcpServer = (): DownstreamMcpServer => {
           };
         });
       }
+
+      server.server.removeRequestHandler("tools/call");
+      server.server.setRequestHandler("tools/call", async (request) => {
+        const params = request.params as { name?: unknown; arguments?: unknown };
+        const name = typeof params.name === "string" ? params.name : "";
+        const args =
+          params.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments)
+            ? (params.arguments as Record<string, unknown>)
+            : {};
+        const result = await handleToolsCall({
+          agentId: agent.id,
+          userId: agent.userId,
+          agentvaultToolName: name,
+          arguments: args,
+        });
+        return {
+          content: result.content.map((block) => ({ type: "text" as const, text: block.text })),
+          isError: result.isError,
+        };
+      });
       return server;
     },
     start: async () => {},

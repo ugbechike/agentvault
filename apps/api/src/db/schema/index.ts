@@ -1,7 +1,13 @@
+export { agentCredentials } from "./agent-credentials";
 export { agents } from "./agents";
 export { auditLogs } from "./audit";
 export { userConnections } from "./connections";
+export { connectionSecrets } from "./connection-secrets";
 export { connectorDefinitions } from "./connectors";
+export { oauthStates } from "./oauth-states";
 export { agentPermissions } from "./permissions";
+export { agentResourceGrants } from "./resource-grants";
+export { refreshTokens } from "./refresh-tokens";
+export { agentToolPolicies } from "./tool-policies";
 export { discoveredTools } from "./tools";
 export { users } from "./users";

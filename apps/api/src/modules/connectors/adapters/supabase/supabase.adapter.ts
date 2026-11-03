@@ -24,10 +24,11 @@ export const supabaseAdapter: ConnectorAdapter = {
     if (!input.projectRef) {
       throw new AppError(400, "PROJECT_REF_REQUIRED", "A Supabase connection requires a project ref.");
     }
-    return {
-      authorizationRequired: true,
-      provider: input.provider,
-    };
+    throw new AppError(
+      503,
+      "SUPABASE_OAUTH_UNAVAILABLE",
+      "Supabase authorization is not configured. The connector stays disconnected.",
+    );
   },
 
   retrieveCredential: async (input) => ({

@@ -24,8 +24,14 @@ export const updateProfileSchema = z.object({
   email: z.string().trim().email(),
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(8).max(200),
+  newPassword: z.string().min(8).max(200),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type RefreshSessionInput = z.infer<typeof refreshSessionSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

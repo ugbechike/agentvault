@@ -13,4 +13,6 @@ export interface AuditLogRecord {
   createdAt: string;
   /** Present in the product UI. Nullable until a call is timed. */
   durationMs: number | null;
+  errorCode: string | null;
+  agentName?: string;
 }
