@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { notConnectedStatus, testConnectionStatus } from "@/components/connectors/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -108,10 +109,10 @@ export const AgentAccess = ({ agent }: { agent: DemoAgent }) => {
   return (
     <div className="space-y-4">
       <Card className="space-y-2">
-        <p className="text-sm font-medium">Browser preview only</p>
+        <p className="text-sm font-medium">Agent access</p>
         <p className="text-sm leading-6 text-ink-soft">
-          Provider connections come from the API. The access choices below stay in this browser. They are not saved on
-          the server and they are not enforced on a tool call.
+          Choose what {agent.name} can do with each connection. A test connection is shared by the workspace, and this
+          agent can use it only after you allow access here. These choices are a preview in this workspace.
         </p>
         {error ? <p className="text-sm text-clay">{error}</p> : null}
       </Card>
@@ -136,7 +137,9 @@ export const AgentAccess = ({ agent }: { agent: DemoAgent }) => {
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{providerLabel[item]}</span>
-                  <Badge tone={itemConnected ? "good" : "neutral"}>{itemConnected ? "Connected" : "Not connected"}</Badge>
+                  <Badge tone={itemConnected ? "copper" : "neutral"}>
+                    {itemConnected ? testConnectionStatus : notConnectedStatus}
+                  </Badge>
                 </span>
                 <span className="mt-1 block text-xs text-ink-soft">{presetLabel[itemPreset]}</span>
               </button>
@@ -149,8 +152,8 @@ export const AgentAccess = ({ agent }: { agent: DemoAgent }) => {
               <h2 className="font-serif text-2xl">{providerLabel[provider]}</h2>
               <p className="mt-1 text-sm text-ink-soft">
                 {connected
-                  ? `Connected${connection?.providerAccountId ? ` · ${connection.providerAccountId}` : ""}. The API does not return OAuth scopes, so a connected provider is the grant ceiling for this preview.`
-                  : "This provider is not connected, so every capability is unavailable."}
+                  ? `Test connection${connection?.providerAccountId ? ` · ${connection.providerAccountId}` : ""}. This uses a ${providerLabel[provider]} credential configured for the workspace. Choose what ${agent.name} can do with it.`
+                  : `Connect ${providerLabel[provider]} before ${agent.name} can use it.`}
               </p>
             </div>
           </div>
@@ -180,7 +183,11 @@ export const AgentAccess = ({ agent }: { agent: DemoAgent }) => {
               <p className="text-xs font-medium tracking-wide text-ink-soft uppercase">
                 {resourceNoun[provider]} limits
               </p>
-              <p className="text-xs text-ink-soft">Empty means no extra limit in this preview.</p>
+              <p className="text-xs text-ink-soft">
+                {provider === "github"
+                  ? "Optional. Add repositories to limit this agent."
+                  : "Optional. Add a project reference to limit this agent."}
+              </p>
             </div>
             <form
               className="mt-2 flex gap-2"
@@ -192,7 +199,7 @@ export const AgentAccess = ({ agent }: { agent: DemoAgent }) => {
               <input
                 value={resourceDraft}
                 onChange={(event) => setResourceDraft(event.target.value)}
-                placeholder={provider === "github" ? "owner/repository" : "project ref"}
+                placeholder={provider === "github" ? "owner/repository" : "project reference"}
                 className="h-10 min-w-0 flex-1 rounded-full border border-line bg-paper-2 px-4 text-sm"
                 disabled={!active}
               />
@@ -240,14 +247,13 @@ export const AgentAccess = ({ agent }: { agent: DemoAgent }) => {
                   return (
                     <li key={tool.agentvaultName} className="flex items-center justify-between gap-3 py-3">
                       <div>
-                        <p className="text-sm font-medium">{tool.agentvaultName}</p>
-                        <p className="text-xs text-ink-soft">{tool.description}</p>
+                        <p className="text-sm font-medium">{tool.description}</p>
                       </div>
                       <input
                         type="checkbox"
                         checked={checked}
                         disabled={!active || !capabilityAllowed}
-                        aria-label={tool.agentvaultName}
+                        aria-label={tool.description}
                         onChange={() =>
                           dispatch({
                             type: "set-tool-policy",
@@ -264,24 +270,24 @@ export const AgentAccess = ({ agent }: { agent: DemoAgent }) => {
             ) : null}
           </div>
           <div>
-            <p className="text-xs font-medium tracking-wide text-ink-soft uppercase">Effective preview</p>
+            <p className="text-xs font-medium tracking-wide text-ink-soft uppercase">What this agent can do</p>
             <ul className="mt-2 space-y-2">
               {capabilityCatalog
                 .filter((capability) => capability.provider === provider)
                 .map((capability) => {
                   const preview = previewEffective(state, agent.id, capability.id, connected);
                   const reason = !connected
-                    ? "Unavailable. Connect this provider before an agent policy can take effect."
+                    ? `Connect ${providerLabel[provider]} before you can allow this.`
                     : !preview.agentAllowed
-                      ? "Denied by this agent's policy. The connection exists, and this choice is not enforced."
+                      ? `${agent.name} cannot use this yet.`
                       : resources.length > 0
-                        ? `Preview allow, limited to ${resources.join(", ")}. Not enforced.`
-                        : "Preview allow for the connected provider. Not enforced.";
+                        ? `Allowed for ${agent.name}, limited to ${resources.join(", ")}.`
+                        : `Allowed for ${agent.name}.`;
                   return (
                     <li key={capability.id} className="rounded-2xl border border-line px-3 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium">{capability.label}</p>
-                        <Badge tone={preview.effective ? "good" : "neutral"}>{preview.effective ? "Preview allow" : "Denied"}</Badge>
+                        <Badge tone={preview.effective ? "good" : "neutral"}>{preview.effective ? "Allowed" : "No access"}</Badge>
                       </div>
                       <p className="mt-1 text-xs leading-5 text-ink-soft">{reason}</p>
                     </li>

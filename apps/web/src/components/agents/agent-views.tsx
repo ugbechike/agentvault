@@ -18,7 +18,7 @@ import { createAgentSchema, type AgentClientKind } from "@agentvault/shared";
 const clientLabel: Record<AgentClientKind, string> = {
   cursor: "Cursor",
   "claude-code": "Claude Code",
-  custom: "Custom MCP client",
+  custom: "Custom agent",
 };
 
 export const AgentListView = () => {
@@ -27,9 +27,9 @@ export const AgentListView = () => {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Consumers"
+        eyebrow="Workspace"
         title="Agents"
-        description="An agent is an external MCP client. Registration stays in this browser and does not issue a credential."
+        description="An agent is an AI assistant that can use the connections you allow. New agents start with no access."
         actions={
           <Link href="/agents/new">
             <Button>Register agent</Button>
@@ -38,7 +38,7 @@ export const AgentListView = () => {
       />
       {state.agents.length === 0 ? (
         <Card>
-          <p className="text-sm text-ink-soft">No agents yet. Register one to set a browser-only access policy.</p>
+          <p className="text-sm text-ink-soft">No agents yet. Add one, then choose which connections it can use.</p>
         </Card>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
@@ -52,7 +52,7 @@ export const AgentListView = () => {
               <Badge tone={agent.status === "active" ? "good" : "bad"}>{agent.status}</Badge>
             </div>
             <p className="mt-3 text-sm leading-6 text-ink-soft">{agent.description}</p>
-            <p className="mt-3 text-xs text-ink-soft">Added {formatTimestamp(agent.createdAt)} · not saved on the server</p>
+            <p className="mt-3 text-xs text-ink-soft">Added {formatTimestamp(agent.createdAt)}</p>
             <Link href={`/agents/${agent.id}`} className="mt-4 inline-block text-sm text-copper-deep underline">
               Configure access
             </Link>
@@ -73,7 +73,7 @@ export const RegisterAgentForm = () => {
       <PageHeader
         eyebrow="Agents"
         title="Register an agent"
-        description="New agents start with no access. This record stays in the browser. No MCP token is generated."
+        description="New agents start with no access. After you save, choose which connections this agent can use."
       />
       <Card>
         <form
@@ -116,10 +116,10 @@ export const RegisterAgentForm = () => {
             <SelectInput id="clientKind" name="clientKind" defaultValue="cursor">
               <option value="cursor">Cursor</option>
               <option value="claude-code">Claude Code</option>
-              <option value="custom">Custom MCP client</option>
+              <option value="custom">Custom agent</option>
             </SelectInput>
           </Field>
-          <Button type="submit">Save agent in this browser</Button>
+          <Button type="submit">Save agent</Button>
         </form>
       </Card>
     </div>
@@ -132,7 +132,7 @@ export const AgentDetailView = ({ agentId }: { agentId: string }) => {
   const [confirming, setConfirming] = useState(false);
 
   if (!agent) {
-    return <Alert tone="bad">That agent is not in the browser workspace.</Alert>;
+    return <Alert tone="bad">That agent could not be found.</Alert>;
   }
 
   return (
@@ -142,10 +142,10 @@ export const AgentDetailView = ({ agentId }: { agentId: string }) => {
         title={agent.name}
         description={agent.description || "No description."}
       />
-      {agent.status === "revoked" ? <Alert tone="bad">This agent is revoked in this browser. Its policy is cleared.</Alert> : null}
+      {agent.status === "revoked" ? <Alert tone="bad">This agent's access has been revoked.</Alert> : null}
       <AgentAccess agent={agent} />
       <Card className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-soft">Revoke clears this agent's browser policy. It does not change the server.</p>
+        <p className="text-sm text-ink-soft">Revoke removes this agent's access to your connections.</p>
         {confirming ? (
           <Button variant="danger" onClick={() => dispatch({ type: "revoke-agent", agentId: agent.id })}>
             Confirm revoke

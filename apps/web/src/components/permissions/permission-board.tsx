@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { notConnectedStatus, testConnectionStatus } from "@/components/connectors/labels";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -35,7 +36,7 @@ export const PermissionBoard = () => {
       <PageHeader
         eyebrow="Policy"
         title="Permissions"
-        description="Choose an agent to set access. A connected provider comes from the API. The agent policy is a browser preview and is not enforced."
+        description="See which agents can use each connection, and open an agent to change that access. Access choices here are a preview for this workspace."
       />
       {error ? <p className="text-sm text-clay">{error}</p> : null}
       {state.agents.length === 0 ? (
@@ -52,7 +53,7 @@ export const PermissionBoard = () => {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="font-serif text-2xl">{agent.name}</h2>
-                  <p className="text-sm text-ink-soft">{agent.status === "active" ? "Active" : "Revoked"} · browser record</p>
+                  <p className="text-sm text-ink-soft">{agent.status === "active" ? "Active" : "Revoked"}</p>
                 </div>
                 <Link href={`/agents/${agent.id}`} className="text-sm text-copper-deep underline">
                   Configure access
@@ -67,7 +68,7 @@ export const PermissionBoard = () => {
                     <li key={provider} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
                       <span className="font-medium">{providerLabel[provider]}</span>
                       <span className="text-ink-soft">{presetLabel(state.permissions, agent.id, provider)}</span>
-                      <Badge tone={connected ? "good" : "neutral"}>{connected ? "Connected" : "Not connected"}</Badge>
+                      <Badge tone={connected ? "copper" : "neutral"}>{connected ? testConnectionStatus : notConnectedStatus}</Badge>
                     </li>
                   );
                 })}

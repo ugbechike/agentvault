@@ -92,8 +92,8 @@ export const SettingsForm = () => {
       </div>
       <Card className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-medium">Browser policy</h2>
-          <p className="text-sm text-ink-soft">Clears agents and access choices stored in this browser. Connections stay on the API.</p>
+          <h2 className="font-medium">Workspace access</h2>
+          <p className="text-sm text-ink-soft">Clears agents and the access you set for them. Saved connections stay in place.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => resetWorkspace()}>
