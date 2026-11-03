@@ -10,6 +10,7 @@
     "dev:web": "pnpm --filter @agentvault/web dev",
     "dev:api": "pnpm --filter @agentvault/api dev",
     "build": "pnpm --filter @agentvault/shared typecheck && pnpm --filter @agentvault/api build && pnpm --filter @agentvault/web build",
+    "start": "node apps/api/dist/server.js",
     "typecheck": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web typecheck",
     "lint": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web lint",
     "test": "pnpm --filter @agentvault/shared --filter @agentvault/api --filter @agentvault/web test",

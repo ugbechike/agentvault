@@ -10,10 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, SelectInput, TextArea, TextInput } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
+import { AgentAccess } from "@/components/agents/agent-access";
 import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
 import { formatTimestamp } from "@/lib/format";
-import { previewEffective } from "@/modules/permissions/preview";
-import { capabilityCatalog, createAgentSchema, type AgentClientKind, type CapabilityId } from "@agentvault/shared";
+import { createAgentSchema, type AgentClientKind } from "@agentvault/shared";
 
 const clientLabel: Record<AgentClientKind, string> = {
   cursor: "Cursor",
@@ -29,13 +29,18 @@ export const AgentListView = () => {
       <PageHeader
         eyebrow="Consumers"
         title="Agents"
-        description="An agent is an external MCP client such as Cursor or Claude Code. Registration here does not issue a credential."
+        description="An agent is an external MCP client. Registration stays in this browser and does not issue a credential."
         actions={
           <Link href="/agents/new">
             <Button>Register agent</Button>
           </Link>
         }
       />
+      {state.agents.length === 0 ? (
+        <Card>
+          <p className="text-sm text-ink-soft">No agents yet. Register one to set a browser-only access policy.</p>
+        </Card>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2">
         {state.agents.map((agent) => (
           <Card key={agent.id}>
@@ -47,7 +52,7 @@ export const AgentListView = () => {
               <Badge tone={agent.status === "active" ? "good" : "bad"}>{agent.status}</Badge>
             </div>
             <p className="mt-3 text-sm leading-6 text-ink-soft">{agent.description}</p>
-            <p className="mt-3 text-xs text-ink-soft">Added {formatTimestamp(agent.createdAt)} · browser record</p>
+            <p className="mt-3 text-xs text-ink-soft">Added {formatTimestamp(agent.createdAt)} · not saved on the server</p>
             <Link href={`/agents/${agent.id}`} className="mt-4 inline-block text-sm text-copper-deep underline">
               Configure access
             </Link>
@@ -68,7 +73,7 @@ export const RegisterAgentForm = () => {
       <PageHeader
         eyebrow="Agents"
         title="Register an agent"
-        description="New agents start with every capability denied. No MCP token is generated."
+        description="New agents start with no access. This record stays in the browser. No MCP token is generated."
       />
       <Card>
         <form
@@ -114,7 +119,7 @@ export const RegisterAgentForm = () => {
               <option value="custom">Custom MCP client</option>
             </SelectInput>
           </Field>
-          <Button type="submit">Save agent locally</Button>
+          <Button type="submit">Save agent in this browser</Button>
         </form>
       </Card>
     </div>
@@ -137,46 +142,10 @@ export const AgentDetailView = ({ agentId }: { agentId: string }) => {
         title={agent.name}
         description={agent.description || "No description."}
       />
-      <Alert tone="warn">
-        These switches preview AgentVault policy. The server does not enforce them, and they cannot exceed a simulated provider grant.
-      </Alert>
-      {agent.status === "revoked" ? <Alert tone="bad">This agent is revoked in the demo. Grants are cleared.</Alert> : null}
-      <div className="grid gap-4 md:grid-cols-2">
-        {capabilityCatalog.map((capability) => {
-          const preview = previewEffective(state, agent.id, capability.id);
-          return (
-            <Card key={capability.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-medium">{capability.label}</h2>
-                  <p className="mt-1 text-sm text-ink-soft">{capability.description}</p>
-                </div>
-                <Badge tone={preview.effective ? "good" : "neutral"}>{preview.effective ? "Preview allow" : "Preview deny"}</Badge>
-              </div>
-              <p className="mt-3 text-xs text-ink-soft">
-                Provider grant {preview.providerGranted ? "on" : "off"} · agent policy {preview.agentAllowed ? "on" : "off"}
-              </p>
-              <Button
-                className="mt-4"
-                variant="secondary"
-                disabled={agent.status !== "active" || (!preview.agentAllowed && !preview.providerGranted)}
-                onClick={() =>
-                  dispatch({
-                    type: "set-agent-capability",
-                    agentId: agent.id,
-                    capability: capability.id as CapabilityId,
-                    allowed: !preview.agentAllowed,
-                  })
-                }
-              >
-                {preview.agentAllowed ? "Remove agent grant" : "Allow for this agent"}
-              </Button>
-            </Card>
-          );
-        })}
-      </div>
+      {agent.status === "revoked" ? <Alert tone="bad">This agent is revoked in this browser. Its policy is cleared.</Alert> : null}
+      <AgentAccess agent={agent} />
       <Card className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-soft">Revoke clears simulated grants for this agent only.</p>
+        <p className="text-sm text-ink-soft">Revoke clears this agent's browser policy. It does not change the server.</p>
         {confirming ? (
           <Button variant="danger" onClick={() => dispatch({ type: "revoke-agent", agentId: agent.id })}>
             Confirm revoke

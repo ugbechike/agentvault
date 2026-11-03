@@ -63,7 +63,7 @@ export const SignUpForm = () => {
         {pending ? "Creating account…" : "Create account"}
       </Button>
       <p className="text-sm text-ink-soft">
-        Already using the demo?{" "}
+        Already have an account?{" "}
         <Link href="/sign-in" className="underline">
           Sign in
         </Link>

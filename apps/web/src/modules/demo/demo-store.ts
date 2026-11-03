@@ -1,7 +1,7 @@
 import { initialDemoState } from "@/modules/demo/fixtures";
 import type { DemoState } from "@/modules/demo/types";
 
-const storageKey = "agentvault-poc-demo-v1";
+const storageKey = "agentvault-poc-workspace-v2";
 const changeEvent = "agentvault-demo-change";
 
 let cachedRaw: string | null = null;
@@ -14,7 +14,15 @@ const parseState = (raw: string | null): DemoState => {
   try {
     const parsed = JSON.parse(raw) as DemoState;
     if (parsed && Array.isArray(parsed.connections) && Array.isArray(parsed.agents)) {
-      return { ...initialDemoState, ...parsed, session: parsed.session ?? null };
+      return {
+        ...initialDemoState,
+        ...parsed,
+        session: parsed.session ?? null,
+        resources: parsed.resources ?? [],
+        toolPolicies: parsed.toolPolicies ?? [],
+        activity: [],
+        connections: [],
+      };
     }
   } catch {
     localStorage.removeItem(storageKey);

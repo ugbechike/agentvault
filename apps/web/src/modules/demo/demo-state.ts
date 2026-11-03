@@ -21,16 +21,13 @@ export type DemoAction =
   | { type: "revoke-agent"; agentId: string }
   | { type: "set-agent-capability"; agentId: string; capability: CapabilityId; allowed: boolean }
   | { type: "set-connection-capability"; provider: ProviderId; capability: CapabilityId; allowed: boolean }
+  | { type: "set-agent-resources"; agentId: string; provider: ProviderId; resources: string[] }
+  | { type: "set-tool-policy"; agentId: string; toolName: string; allowed: boolean }
+  | { type: "clear-tool-policies"; agentId: string; toolNames: readonly string[] }
   | { type: "reset-workspace" };
 
 const providerOf = (capability: CapabilityId): ProviderId =>
   capability.startsWith("github.") ? "github" : "supabase";
-
-const grantFor = (state: DemoState, capability: CapabilityId): boolean => {
-  const provider = providerOf(capability);
-  const connection = state.connections.find((item) => item.provider === provider);
-  return Boolean(connection?.status === "connected" && connection.grantedCapabilities.includes(capability));
-};
 
 const upsertPermission = (
   permissions: DemoPermission[],
@@ -125,9 +122,6 @@ export const demoReducer = (state: DemoState, action: DemoAction): DemoState => 
         ),
       };
     case "set-agent-capability": {
-      if (action.allowed && !grantFor(state, action.capability)) {
-        return state;
-      }
       const agent = state.agents.find((item) => item.id === action.agentId);
       if (!agent || agent.status !== "active") {
         return state;
@@ -160,6 +154,35 @@ export const demoReducer = (state: DemoState, action: DemoAction): DemoState => 
           );
       return { ...state, connections, permissions };
     }
+    case "set-agent-resources": {
+      const existing = state.resources.findIndex(
+        (item) => item.agentId === action.agentId && item.provider === action.provider,
+      );
+      const next = { agentId: action.agentId, provider: action.provider, resources: action.resources };
+      const resources =
+        existing === -1
+          ? [...state.resources, next]
+          : state.resources.map((item, index) => (index === existing ? next : item));
+      return { ...state, resources };
+    }
+    case "set-tool-policy": {
+      const existing = state.toolPolicies.findIndex(
+        (item) => item.agentId === action.agentId && item.toolName === action.toolName,
+      );
+      const next = { agentId: action.agentId, toolName: action.toolName, allowed: action.allowed };
+      const toolPolicies =
+        existing === -1
+          ? [...state.toolPolicies, next]
+          : state.toolPolicies.map((item, index) => (index === existing ? next : item));
+      return { ...state, toolPolicies };
+    }
+    case "clear-tool-policies":
+      return {
+        ...state,
+        toolPolicies: state.toolPolicies.filter(
+          (item) => item.agentId !== action.agentId || !action.toolNames.includes(item.toolName),
+        ),
+      };
     case "reset-workspace":
       return { ...initialDemoState, session: state.session };
     default:

@@ -8,19 +8,25 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
-import { formatTimestamp } from "@/lib/format";
-import { summarizeWorkspace } from "@/modules/dashboard/summary";
+import { useProviderConnections } from "@/hooks/use-provider-connections";
+import { connectorCatalog, connectableProviders } from "@agentvault/shared";
+
+const providerName = (provider: string): string =>
+  connectorCatalog.find((entry) => entry.provider === provider)?.name ?? provider;
 
 export const DashboardView = () => {
   const { state } = useDemoWorkspace();
-  const summary = summarizeWorkspace(state);
+  const { connections, error } = useProviderConnections();
+  const connected = connections.filter((connection) => connection.status === "connected");
+  const activeAgents = state.agents.filter((agent) => agent.status === "active");
+  const allowedGrants = state.permissions.filter((permission) => permission.allowed);
 
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Workspace"
         title={`Hello, ${state.session?.name.split(" ")[0] ?? "there"}`}
-        description="A sample brokerage workspace. Connection health below mixes a live API check with browser fixtures."
+        description="Connections and API health come from the server. Agent counts are records saved in this browser."
         actions={
           <>
             <Link href="/connectors/supabase/connect">
@@ -32,12 +38,13 @@ export const DashboardView = () => {
           </>
         }
       />
+      {error ? <p className="text-sm text-clay">{error}</p> : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ["Connected services", String(summary.connectedCount), "Simulated status"],
-          ["Active agents", String(summary.agentCount), "Browser records"],
-          ["Allowed grants", String(summary.allowedGrants), "Not enforced"],
-          ["Recent samples", String(summary.recent.length), "Not MCP traffic"],
+          ["Connected services", String(connected.length), "From the API"],
+          ["Active agents", String(activeAgents.length), "Saved in this browser"],
+          ["Allowed grants", String(allowedGrants.length), "Not enforced"],
+          ["Audit events", "0", "The audit API has no events"],
         ].map(([label, value, note]) => (
           <Card key={label}>
             <p className="text-sm text-ink-soft">{label}</p>
@@ -49,46 +56,31 @@ export const DashboardView = () => {
       <div className="grid gap-4 lg:grid-cols-[1.4fr_0.8fr]">
         <Card>
           <h2 className="font-serif text-2xl">Recent tool activity</h2>
-          <ul className="mt-4 divide-y divide-line">
-            {summary.recent.map((event) => (
-              <li key={event.id} className="flex items-start justify-between gap-3 py-3">
-                <div>
-                  <p className="text-sm font-medium">{event.toolName}</p>
-                  <p className="text-sm text-ink-soft">
-                    {event.agentName} · {event.provider} · {formatTimestamp(event.timestamp)}
-                  </p>
-                </div>
-                <Badge tone={event.status === "success" ? "good" : event.status === "denied" ? "warn" : "bad"}>
-                  {event.status}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-          <Link href="/activity" className="mt-2 inline-block text-sm text-copper-deep underline">
-            View the sample log
+          <p className="mt-4 text-sm leading-6 text-ink-soft">
+            No audit events are available. Tool calls are not listed until the audit API returns them.
+          </p>
+          <Link href="/activity" className="mt-4 inline-block text-sm text-copper-deep underline">
+            Open the audit log
           </Link>
         </Card>
         <Card className="space-y-4">
           <h2 className="font-serif text-2xl">Connection health</h2>
           <ApiStatus />
-          {state.connections.map((connection) => (
-            <div key={connection.id} className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium capitalize">{connection.provider}</p>
-                <p className="text-sm text-ink-soft">
-                  {connection.status === "connected" ? connection.accountLabel : "Not connected"} · simulated
-                </p>
+          {connectableProviders.map((provider) => {
+            const match = connections.find((connection) => connection.provider === provider);
+            const isConnected = match?.status === "connected";
+            return (
+              <div key={provider} className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">{providerName(provider)}</p>
+                  <p className="text-sm text-ink-soft">
+                    {isConnected ? match?.providerAccountId || "Connected" : "Not connected"}
+                  </p>
+                </div>
+                <Badge tone={isConnected ? "good" : "neutral"}>{isConnected ? "connected" : "not connected"}</Badge>
               </div>
-              <Badge tone={connection.status === "connected" ? "good" : "neutral"}>{connection.status}</Badge>
-            </div>
-          ))}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Downstream MCP</p>
-              <p className="text-sm text-ink-soft">Endpoint returns 501</p>
-            </div>
-            <Badge tone="warn">Not implemented</Badge>
-          </div>
+            );
+          })}
         </Card>
       </div>
     </div>

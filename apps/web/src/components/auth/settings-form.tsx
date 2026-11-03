@@ -30,9 +30,8 @@ export const SettingsForm = () => {
       <PageHeader
         eyebrow="Account"
         title="Settings"
-        description="Profile edits stay in this browser. Password changes are refused by the API and are not applied here either."
+        description={`Signed in as ${session.email}. Profile edits stay in this browser.`}
       />
-      <Alert tone="warn">Mock session for {session.email}. This is not a secure account.</Alert>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <h2 className="font-serif text-2xl">Profile</h2>
@@ -93,8 +92,8 @@ export const SettingsForm = () => {
       </div>
       <Card className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-medium">Demo data</h2>
-          <p className="text-sm text-ink-soft">Restore the sample GitHub connection, agents, and activity.</p>
+          <h2 className="font-medium">Browser policy</h2>
+          <p className="text-sm text-ink-soft">Clears agents and access choices stored in this browser. Connections stay on the API.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => resetWorkspace()}>

@@ -58,10 +58,24 @@ export interface DemoActivity {
   simulated: true;
 }
 
+export interface DemoResourceLimit {
+  agentId: string;
+  provider: ProviderId;
+  resources: string[];
+}
+
+export interface DemoToolPolicy {
+  agentId: string;
+  toolName: string;
+  allowed: boolean;
+}
+
 export interface DemoState {
   session: DemoSession | null;
   connections: DemoConnection[];
   agents: DemoAgent[];
   permissions: DemoPermission[];
   activity: DemoActivity[];
+  resources: DemoResourceLimit[];
+  toolPolicies: DemoToolPolicy[];
 }

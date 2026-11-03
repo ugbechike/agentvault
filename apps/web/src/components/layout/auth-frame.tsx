@@ -1,8 +1,6 @@
 import { ShieldCheck, Vault } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { DemoBanner } from "@/components/layout/demo-banner";
-
 const points = [
   "You authorize the provider.",
   "You choose what each agent may do.",
@@ -11,8 +9,7 @@ const points = [
 
 export const AuthFrame = ({ children }: { children: ReactNode }) => (
   <div className="min-h-screen bg-paper">
-    <DemoBanner />
-    <div className="grid min-h-[calc(100vh-2.5rem)] lg:grid-cols-2">
+    <div className="grid min-h-screen lg:grid-cols-2">
       <section className="hidden flex-col justify-between bg-sidebar px-12 py-12 text-paper lg:flex">
         <div className="flex items-center gap-3">
           <span className="grid size-10 place-items-center rounded-2xl bg-copper">

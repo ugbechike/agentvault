@@ -1,94 +1,81 @@
 "use client";
 
-import { illustrativeAllowlist, capabilityCatalog } from "@agentvault/shared";
+import Link from "next/link";
 
-import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
-import { previewEffective } from "@/modules/permissions/preview";
+import { useProviderConnections } from "@/hooks/use-provider-connections";
+import { connectableProviders, type ProviderId } from "@agentvault/shared";
+
+const providerLabel: Record<ProviderId, string> = {
+  github: "GitHub",
+  supabase: "Supabase",
+};
+
+const presetLabel = (
+  permissions: { agentId: string; capability: string; allowed: boolean }[],
+  agentId: string,
+  provider: ProviderId,
+): string => {
+  const write = permissions.some((item) => item.agentId === agentId && item.capability === `${provider}.write` && item.allowed);
+  const read = permissions.some((item) => item.agentId === agentId && item.capability === `${provider}.read` && item.allowed);
+  if (write) return "Read and write";
+  if (read) return "Read only";
+  return "No access";
+};
 
 export const PermissionBoard = () => {
-  const { state, dispatch } = useDemoWorkspace();
-  const activeAgents = state.agents.filter((agent) => agent.status === "active");
+  const { state } = useDemoWorkspace();
+  const { connections, error } = useProviderConnections();
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Policy"
         title="Permissions"
-        description="Effective access is the overlap of the provider grant and the agent policy. This board previews that rule. The API evaluator returns 501 and fails closed."
+        description="Choose an agent to set access. A connected provider comes from the API. The agent policy is a browser preview and is not enforced."
       />
-      <Alert tone="warn">
-        Hiding a tool here would not be authorization. A future tools/call must check the same rule on the server.
-      </Alert>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {capabilityCatalog.map((capability) => {
-          const tools = illustrativeAllowlist.filter((tool) => tool.requiredCapability === capability.id);
-          const provider = capability.provider;
-          const connection = state.connections.find((item) => item.provider === provider);
-          const granted = Boolean(connection?.grantedCapabilities.includes(capability.id));
-          return (
-            <Card key={capability.id}>
-              <div className="flex items-start justify-between gap-3">
+      {error ? <p className="text-sm text-clay">{error}</p> : null}
+      {state.agents.length === 0 ? (
+        <Card>
+          <p className="text-sm text-ink-soft">No agents yet.</p>
+          <Link href="/agents/new" className="mt-3 inline-block text-sm text-copper-deep underline">
+            Register an agent
+          </Link>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {state.agents.map((agent) => (
+            <Card key={agent.id} className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-serif text-2xl">{capability.label}</h2>
-                  <p className="mt-1 text-sm text-ink-soft">{capability.description}</p>
+                  <h2 className="font-serif text-2xl">{agent.name}</h2>
+                  <p className="text-sm text-ink-soft">{agent.status === "active" ? "Active" : "Revoked"} · browser record</p>
                 </div>
-                <Badge tone={granted ? "good" : "neutral"}>{granted ? "Provider grant on" : "Provider grant off"}</Badge>
+                <Link href={`/agents/${agent.id}`} className="text-sm text-copper-deep underline">
+                  Configure access
+                </Link>
               </div>
-              <button
-                type="button"
-                className="mt-4 rounded-full border border-line px-3 py-1 text-xs disabled:opacity-40"
-                disabled={connection?.status !== "connected"}
-                onClick={() =>
-                  dispatch({
-                    type: "set-connection-capability",
-                    provider,
-                    capability: capability.id,
-                    allowed: !granted,
-                  })
-                }
-              >
-                {granted ? "Remove simulated provider grant" : "Add simulated provider grant"}
-              </button>
-              <p className="mt-4 text-xs font-medium tracking-wide text-ink-soft uppercase">Illustrative tools</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {tools.map((tool) => (
-                  <li key={tool.agentvaultName}>{tool.agentvaultName}</li>
-                ))}
-              </ul>
-              <div className="mt-4 space-y-2">
-                {activeAgents.map((agent) => {
-                  const preview = previewEffective(state, agent.id, capability.id);
+              <ul className="divide-y divide-line">
+                {connectableProviders.map((provider) => {
+                  const connected = connections.some(
+                    (item) => item.provider === provider && item.status === "connected",
+                  );
                   return (
-                    <div key={agent.id} className="flex items-center justify-between gap-3 text-sm">
-                      <span>{agent.name}</span>
-                      <span className="text-ink-soft">{preview.effective ? "Preview allow" : "Preview deny"}</span>
-                      <button
-                        type="button"
-                        className="rounded-full border border-line px-3 py-1 text-xs disabled:opacity-40"
-                        disabled={!preview.agentAllowed && !preview.providerGranted}
-                        onClick={() =>
-                          dispatch({
-                            type: "set-agent-capability",
-                            agentId: agent.id,
-                            capability: capability.id,
-                            allowed: !preview.agentAllowed,
-                          })
-                        }
-                      >
-                        {preview.agentAllowed ? "Agent on" : "Agent off"}
-                      </button>
-                    </div>
+                    <li key={provider} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                      <span className="font-medium">{providerLabel[provider]}</span>
+                      <span className="text-ink-soft">{presetLabel(state.permissions, agent.id, provider)}</span>
+                      <Badge tone={connected ? "good" : "neutral"}>{connected ? "Connected" : "Not connected"}</Badge>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             </Card>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

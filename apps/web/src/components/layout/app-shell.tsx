@@ -3,7 +3,6 @@
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 
-import { DemoBanner } from "@/components/layout/demo-banner";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useDemoWorkspace } from "@/hooks/use-demo-workspace";
 
@@ -13,8 +12,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="min-h-screen bg-paper">
-      <DemoBanner />
-      <div className="mx-auto grid min-h-[calc(100vh-2.5rem)] max-w-[1400px] md:grid-cols-[240px_1fr]">
+      <div className="mx-auto grid min-h-screen max-w-[1400px] md:grid-cols-[240px_1fr]">
         <aside className="hidden bg-sidebar px-4 py-6 md:block">
           <SidebarNav />
         </aside>
@@ -44,9 +42,7 @@ export const AppShell = ({ children }: { children: React.ReactNode }) => {
             </div>
           ) : null}
           <div className="flex items-center justify-end px-6 pt-5 text-sm text-ink-soft">
-            <span>{state.session?.name}</span>
-            <span className="mx-2 text-line">/</span>
-            <span>Mock session</span>
+            <span>{state.session?.email}</span>
           </div>
           <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>
         </div>

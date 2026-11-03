@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "steps": {
+    "build": {
+      "commands": ["pnpm --filter @agentvault/api build"]
+    }
+  },
+  "deploy": {
+    "startCommand": "node apps/api/dist/server.js"
+  }
+}
