@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { connectLabel } from "@/components/connectors/labels";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,10 +22,14 @@ export const SupabaseConnectFlow = () => {
       <PageHeader
         eyebrow="Supabase"
         title="Connect Supabase"
-        description="The project ref is stored on the connection. Agent access is configured on the agent page."
+        description="Choose the Supabase project agents may use. You still decide which agents can read it or make changes."
       />
       <Card className="space-y-4">
-        <Field label="Project ref" htmlFor="project-ref" hint="The ref from the Supabase project URL.">
+        <Field
+          label="Project reference"
+          htmlFor="project-ref"
+          hint="Find this in your Supabase project settings. Agents are limited to this project."
+        >
           <TextInput
             id="project-ref"
             value={projectRef}
@@ -32,10 +37,10 @@ export const SupabaseConnectFlow = () => {
             autoComplete="off"
           />
         </Field>
-        <p className="text-sm leading-6 text-ink-soft">
-          The API stores the credential name <span className="font-medium">SUPABASE_MCP_TOKEN</span>. Supabase OAuth
-          redirect is not part of this step.
-        </p>
+        <Alert tone="neutral">
+          This saves a test connection. AgentVault uses a Supabase credential already configured for this workspace.
+          You stay here while connecting, then choose which agents can use this project.
+        </Alert>
         {saveError ? <Alert tone="bad">{saveError}</Alert> : null}
         <Button
           disabled={pending || projectRef.trim().length === 0}
@@ -50,7 +55,7 @@ export const SupabaseConnectFlow = () => {
               });
           }}
         >
-          {pending ? "Saving connection…" : "Save Supabase connection"}
+          {pending ? "Connecting…" : connectLabel("Supabase")}
         </Button>
       </Card>
     </div>

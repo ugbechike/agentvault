@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { connectLabel } from "@/components/connectors/labels";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -19,12 +20,16 @@ export const GithubConnectFlow = () => {
       <PageHeader
         eyebrow="GitHub"
         title="Connect GitHub"
-        description="This saves a GitHub connection for the signed-in account. Agent access is configured on the agent page."
+        description="Give agents a way to read repositories and files, and to open issues. You choose which agents can use GitHub after this connection is saved."
       />
       <Card className="space-y-4">
+        <Alert tone="neutral">
+          This saves a test connection. AgentVault uses a GitHub credential already configured for this workspace.
+          You stay here while connecting, then decide which agents can read GitHub or make changes.
+        </Alert>
         <p className="text-sm leading-6 text-ink-soft">
-          The API stores the credential name <span className="font-medium">GITHUB_MCP_TOKEN</span>. The token stays in
-          the API environment. GitHub OAuth redirect is not part of this step.
+          This connection is shared by the workspace. Open an agent afterward and allow GitHub for the assistants that
+          should use it. You can disconnect from the GitHub connection page at any time.
         </p>
         {saveError ? <Alert tone="bad">{saveError}</Alert> : null}
         <Button
@@ -40,7 +45,7 @@ export const GithubConnectFlow = () => {
               });
           }}
         >
-          {pending ? "Saving connection…" : "Save GitHub connection"}
+          {pending ? "Connecting…" : connectLabel("GitHub")}
         </Button>
       </Card>
     </div>

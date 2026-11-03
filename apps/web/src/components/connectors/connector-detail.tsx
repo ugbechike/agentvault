@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import {
+  connectLabel,
+  disconnectLabel,
+  notConnectedStatus,
+  testConnectionStatus,
+} from "@/components/connectors/labels";
 import { ToolList } from "@/components/connectors/tool-list";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +25,8 @@ import {
 } from "@/modules/connectors/connection-api";
 import { capabilityCatalog, connectorCatalog, type ProviderId } from "@agentvault/shared";
 
+const accessLevel = (capabilityId: string): string => (capabilityId.endsWith(".write") ? "Write" : "Read");
+
 export const ConnectorDetail = ({ provider }: { provider: string }) => {
   const entry = connectorCatalog.find((item) => item.provider === provider);
   const { connections, error, reload } = useProviderConnections();
@@ -33,8 +41,8 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
   if (entry.status !== "available") {
     return (
       <div className="space-y-4">
-        <PageHeader eyebrow="Connector" title={entry.name} description={entry.description} />
-        <Alert tone="warn">No adapter exists for {entry.name}. The marketplace keeps the slot for a later provider.</Alert>
+        <PageHeader eyebrow="Connector" title={entry.name} description={entry.authModel} />
+        <Alert tone="warn">{entry.name} is on the way. You will connect it here and choose which agents can use it.</Alert>
       </div>
     );
   }
@@ -63,24 +71,33 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
         title={entry.name}
         description={entry.authModel}
         actions={
-          <Link href={`/connectors/${provider}/connect`}>
-            <Button>{connected ? "Connect again" : "Connect"}</Button>
-          </Link>
+          connected ? undefined : (
+            <Link href={`/connectors/${provider}/connect`}>
+              <Button>{connectLabel(entry.name)}</Button>
+            </Link>
+          )
         }
       />
       {error ? <Alert tone="bad">{error}</Alert> : null}
       {actionError ? <Alert tone="bad">{actionError}</Alert> : null}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="font-serif text-2xl">Connection</h2>
-            <Badge tone={connected ? "good" : "neutral"}>{connected ? "Connected" : "Not connected"}</Badge>
+            <Badge tone={connected ? "copper" : "neutral"}>{connected ? testConnectionStatus : notConnectedStatus}</Badge>
           </div>
-          <p className="text-sm text-ink-soft">Project: {connection?.providerAccountId ?? "Not used"}</p>
+          <p className="text-sm leading-6 text-ink-soft">
+            {connected
+              ? `Agents can use a ${entry.name} credential already configured for this workspace. Allow access on each agent before they can use it.`
+              : `Connect ${entry.name} with the credential already configured for this workspace, then choose which agents can use it.`}
+          </p>
+          {typedProvider === "supabase" ? (
+            <p className="text-sm text-ink-soft">Project: {connection?.providerAccountId ?? "Add a project when you connect"}</p>
+          ) : null}
           <p className="text-sm text-ink-soft">
             Updated: {connection?.updatedAt ? formatTimestamp(connection.updatedAt) : "Never"}
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
               disabled={!connection || pending}
@@ -92,12 +109,12 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
                   .then(() => loadConnectionTools(connection.id))
                   .then(setTools)
                   .catch((cause: unknown) => {
-                    setActionError(cause instanceof Error ? cause.message : "Tool discovery failed.");
+                    setActionError(cause instanceof Error ? cause.message : "Available actions could not be refreshed.");
                   })
                   .finally(() => setPending(false));
               }}
             >
-              {pending ? "Discovering…" : "Discover tools"}
+              {pending ? "Refreshing…" : "Refresh actions"}
             </Button>
             <Button
               variant="danger"
@@ -114,12 +131,13 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
                   .finally(() => setPending(false));
               }}
             >
-              Disconnect
+              {disconnectLabel}
             </Button>
           </div>
         </Card>
         <Card>
-          <h2 className="font-serif text-2xl">Provider permissions</h2>
+          <h2 className="font-serif text-2xl">Access you can grant</h2>
+          <p className="mt-2 text-sm text-ink-soft">Grant these on each agent that should use this connection.</p>
           <ul className="mt-4 space-y-3">
             {capabilities.map((capability) => (
               <li key={capability.id} className="flex items-start justify-between gap-3">
@@ -127,28 +145,29 @@ export const ConnectorDetail = ({ provider }: { provider: string }) => {
                   <p className="text-sm font-medium">{capability.label}</p>
                   <p className="text-sm text-ink-soft">{capability.description}</p>
                 </div>
-                <span className="rounded-full border border-line px-3 py-1 text-xs">{capability.id}</span>
+                <span className="rounded-full border border-line px-3 py-1 text-xs">{accessLevel(capability.id)}</span>
               </li>
             ))}
           </ul>
         </Card>
       </div>
       <Card>
-        <h2 className="font-serif text-2xl">Discovered tools</h2>
+        <h2 className="font-serif text-2xl">Available actions</h2>
         <p className="mt-2 mb-4 text-sm text-ink-soft">
-          Tools appear here after discovery runs against the saved connection.
+          These are the actions agents can take with this connection after you allow access.
         </p>
         <ToolList
-          discovered
           tools={tools.map((tool) => ({
             id: tool.id,
-            agentvaultName: tool.upstreamToolName,
-            upstreamName: tool.upstreamToolName,
+            name: tool.upstreamToolName,
             description: tool.description,
-            inputSchema: tool.inputSchema,
             requiredCapability: tool.requiredCapability,
           }))}
-          empty={connected ? "No tools discovered yet." : "Connect this provider before discovering tools."}
+          empty={
+            connected
+              ? "No actions yet. Refresh to see what agents can do with this connection."
+              : `Connect ${entry.name} to see what agents can do with it.`
+          }
         />
       </Card>
     </div>

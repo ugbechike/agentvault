@@ -14,7 +14,7 @@ export const MarketplaceView = () => {
       <PageHeader
         eyebrow="Marketplace"
         title="Connectors"
-        description="GitHub and Supabase have adapter skeletons. Gmail, Drive, and Notion are listed so the catalog can grow without sharing one auth flow."
+        description="Connect a service your agents can use. You choose which agents get access, and you can disconnect at any time."
       />
       {error ? <p className="text-sm text-ink-soft">{error}</p> : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

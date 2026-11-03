@@ -1,5 +1,11 @@
 import Link from "next/link";
 
+import {
+  connectLabel,
+  manageConnectionLabel,
+  notConnectedStatus,
+  testConnectionStatus,
+} from "@/components/connectors/labels";
 import { ProviderMark } from "@/components/connectors/provider-mark";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,9 +26,9 @@ export const ConnectorCard = ({
       <div className="flex items-start justify-between gap-3">
         <ProviderMark provider={entry.provider} />
         {available ? (
-          <Badge tone={connected ? "good" : "neutral"}>{connected ? "Connected" : "Not connected"}</Badge>
+          <Badge tone={connected ? "copper" : "neutral"}>{connected ? testConnectionStatus : notConnectedStatus}</Badge>
         ) : (
-          <Badge tone="warn">Planned</Badge>
+          <Badge tone="warn">Coming soon</Badge>
         )}
       </div>
       <h2 className="mt-4 font-serif text-2xl">{entry.name}</h2>
@@ -32,18 +38,24 @@ export const ConnectorCard = ({
           <li key={capability}>· {capability}</li>
         ))}
       </ul>
-      <div className="mt-5 flex gap-2">
+      <div className="mt-5 flex flex-wrap gap-2">
         {available ? (
-          <>
-            <Link href={`/connectors/${entry.provider}/connect`}>
-              <Button>{connected ? "Review setup" : "Connect"}</Button>
-            </Link>
+          connected ? (
             <Link href={`/connectors/${entry.provider}`}>
-              <Button variant="secondary">Manage</Button>
+              <Button>{manageConnectionLabel}</Button>
             </Link>
-          </>
+          ) : (
+            <>
+              <Link href={`/connectors/${entry.provider}/connect`}>
+                <Button>{connectLabel(entry.name)}</Button>
+              </Link>
+              <Link href={`/connectors/${entry.provider}`}>
+                <Button variant="secondary">{manageConnectionLabel}</Button>
+              </Link>
+            </>
+          )
         ) : (
-          <Button disabled>Not in this POC</Button>
+          <Button disabled>Coming soon</Button>
         )}
       </div>
     </Card>
